@@ -1,0 +1,227 @@
+(* Symbolic model of the TDT-Pipe validated telemetry pipeline.
+
+   Purpose
+   -------
+   This model captures the security-critical actor chain:
+
+       Sensor -> Secure Publisher -> untrusted MQTT Broker/channel
+              -> Edge Security Gateway -> DT State Manager / Audit-Provenance
+
+   It models two registered devices, two authorized topics, one unauthorized
+   topic, device-specific symmetric validation keys, payload digests, HMAC
+   protection of the protected body, registry-based authorization at the
+   gateway, sequence binding, replay filtering through an abstract seen table,
+   and creation of state/audit events after successful gateway validation.
+
+   Honest scope statement
+   ----------------------
+   This is a symbolic Dolev-Yao model of authentication, integrity, topic
+   binding, device binding, replay filtering at the level of symbolic sequence
+   identifiers, and propagation to state/audit events. It intentionally
+   abstracts from numeric timestamp windows, clock drift, semantic plausibility
+   thresholds, quarantine review workflows, SQLite/storage persistence, MQTT QoS
+   behavior, and compromised gateway/registry/device-key scenarios.
+*)
+
+free sensor_ch_1: channel [private].
+free sensor_ch_2: channel [private].
+free mqtt_in: channel.
+free mqtt_out: channel.
+free gateway_lock_1: channel [private].
+free gateway_lock_2: channel [private].
+free lock_token_1: bitstring [private].
+free lock_token_2: bitstring [private].
+free provenance_ch: channel [private].
+free state_ch: channel [private].
+
+free device_1: bitstring.
+free device_2: bitstring.
+free topic_1: bitstring.
+free topic_2: bitstring.
+free topic_unauthorized: bitstring.
+
+free k_1: bitstring [private].
+free k_2: bitstring [private].
+
+fun digest(bitstring): bitstring.
+fun protected_body(bitstring, bitstring, bitstring, bitstring, bitstring): bitstring.
+fun hmac(bitstring, bitstring): bitstring.
+
+table seen(bitstring, bitstring, bitstring).
+
+event sensor_measure(bitstring, bitstring, bitstring).
+event secure_publish(bitstring, bitstring, bitstring, bitstring, bitstring).
+event broker_forward(bitstring, bitstring, bitstring, bitstring, bitstring).
+event gateway_validated(bitstring, bitstring, bitstring, bitstring, bitstring).
+event provenance_created(bitstring, bitstring, bitstring, bitstring, bitstring).
+event dt_state_applied(bitstring, bitstring, bitstring, bitstring, bitstring).
+event gateway_accept(bitstring, bitstring, bitstring, bitstring, bitstring).
+
+(* Device validation keys remain secret for non-compromised devices. *)
+query attacker(k_1).
+query attacker(k_2).
+
+(* Successful admission is injectively authenticated by a prior secure
+   publication of the same device, topic, payload, and sequence identifier. *)
+query d: bitstring, t: bitstring, p: bitstring, s: bitstring, ts: bitstring;
+      inj-event(gateway_accept(d, t, p, s, ts)) ==> inj-event(secure_publish(d, t, p, s, ts)).
+
+(* The gateway must not accept unauthorized topics. *)
+query d: bitstring, p: bitstring, s: bitstring, ts: bitstring;
+      event(gateway_accept(d, topic_unauthorized, p, s, ts)) ==> false.
+
+(* Reachability sanity checks for the registered device-topic streams. These
+   are not security properties; they help detect dead modeled branches. The
+   dedicated tdt_pipe_reachability_sanity.pv model gives the corresponding
+   bounded honest-execution result in a cleaner form. *)
+query p: bitstring, s: bitstring, ts: bitstring;
+      event(gateway_accept(device_1, topic_1, p, s, ts)).
+
+query p: bitstring, s: bitstring, ts: bitstring;
+      event(gateway_accept(device_2, topic_2, p, s, ts)).
+
+(* The accepted value originates from a local sensor measurement under the
+   assumption that the Sensor-to-Secure-Publisher channel is trusted/private. *)
+query d: bitstring, t: bitstring, p: bitstring, s: bitstring, ts: bitstring;
+      event(gateway_accept(d, t, p, s, ts)) ==> event(sensor_measure(d, t, p)).
+
+(* Provenance and DT state managers only process gateway-validated updates. *)
+query d: bitstring, t: bitstring, p: bitstring, s: bitstring, ts: bitstring;
+      event(provenance_created(d, t, p, s, ts)) ==> event(gateway_validated(d, t, p, s, ts)).
+
+query d: bitstring, t: bitstring, p: bitstring, s: bitstring, ts: bitstring;
+      event(dt_state_applied(d, t, p, s, ts)) ==> event(gateway_validated(d, t, p, s, ts)).
+
+(* Sensor processes produce physical measurements on private local channels. *)
+let Sensor1 =
+    !
+    new payload: bitstring;
+    event sensor_measure(device_1, topic_1, payload);
+    out(sensor_ch_1, payload).
+
+let Sensor2 =
+    !
+    new payload: bitstring;
+    event sensor_measure(device_2, topic_2, payload);
+    out(sensor_ch_2, payload).
+
+(* Secure publishers transform local measurements into protected telemetry
+   messages. The sequence identifier is modeled as a fresh symbolic value and
+   is included in the HMAC-protected body. *)
+let SecurePublisher1 =
+    !
+    in(sensor_ch_1, payload: bitstring);
+    new timestamp: bitstring;
+    new sequence: bitstring;
+    let payload_digest = digest(payload) in
+    let body = protected_body(device_1, topic_1, timestamp, sequence, payload_digest) in
+    let tag = hmac(k_1, body) in
+    event secure_publish(device_1, topic_1, payload, sequence, timestamp);
+    out(mqtt_in, (device_1, topic_1, timestamp, sequence, payload, payload_digest, tag)).
+
+let SecurePublisher2 =
+    !
+    in(sensor_ch_2, payload: bitstring);
+    new timestamp: bitstring;
+    new sequence: bitstring;
+    let payload_digest = digest(payload) in
+    let body = protected_body(device_2, topic_2, timestamp, sequence, payload_digest) in
+    let tag = hmac(k_2, body) in
+    event secure_publish(device_2, topic_2, payload, sequence, timestamp);
+    out(mqtt_in, (device_2, topic_2, timestamp, sequence, payload, payload_digest, tag)).
+
+(* The broker is not trusted for integrity. It receives from and forwards to
+   public channels, so the attacker can observe, modify, replay, drop, and
+   inject messages. *)
+let Broker =
+    !
+    in(mqtt_in, (
+        claimed_device: bitstring,
+        topic: bitstring,
+        timestamp: bitstring,
+        sequence: bitstring,
+        payload: bitstring,
+        payload_digest: bitstring,
+        tag: bitstring
+    ));
+    event broker_forward(claimed_device, topic, payload, sequence, timestamp);
+    out(mqtt_out, (claimed_device, topic, timestamp, sequence, payload, payload_digest, tag)).
+
+let ProvenanceManager =
+    !
+    in(provenance_ch, (d: bitstring, t: bitstring, p: bitstring, s: bitstring, ts: bitstring));
+    event provenance_created(d, t, p, s, ts).
+
+let DTStateManager =
+    !
+    in(state_ch, (d: bitstring, t: bitstring, p: bitstring, s: bitstring, ts: bitstring));
+    event dt_state_applied(d, t, p, s, ts).
+
+(* The gateway implements the registry checks for the two registered
+   device-topic streams. The private stream-specific locks model the
+   implementation requirement that sequence-state validation and update are
+   atomic for each protected stream. A symbolic seen table abstracts replay
+   filtering: a repeated accepted sequence for the same device-topic stream is
+   not admitted again. *)
+let Gateway =
+    !
+    in(mqtt_out, (
+        claimed_device: bitstring,
+        topic: bitstring,
+        timestamp: bitstring,
+        sequence: bitstring,
+        payload: bitstring,
+        received_digest: bitstring,
+        received_tag: bitstring
+    ));
+    if claimed_device = device_1 then (
+        if topic = topic_1 then (
+            if received_digest = digest(payload) then (
+                if received_tag = hmac(k_1, protected_body(claimed_device, topic, timestamp, sequence, received_digest)) then (
+                    in(gateway_lock_1, =lock_token_1);
+                    get seen(=claimed_device, =topic, =sequence) in (
+                        out(gateway_lock_1, lock_token_1)
+                    ) else (
+                        insert seen(claimed_device, topic, sequence);
+                        out(gateway_lock_1, lock_token_1);
+                        event gateway_validated(claimed_device, topic, payload, sequence, timestamp);
+                        out(provenance_ch, (claimed_device, topic, payload, sequence, timestamp));
+                        out(state_ch, (claimed_device, topic, payload, sequence, timestamp));
+                        event gateway_accept(claimed_device, topic, payload, sequence, timestamp)
+                    )
+                )
+            )
+        )
+    ) else (
+        if claimed_device = device_2 then (
+            if topic = topic_2 then (
+                if received_digest = digest(payload) then (
+                    if received_tag = hmac(k_2, protected_body(claimed_device, topic, timestamp, sequence, received_digest)) then (
+                        in(gateway_lock_2, =lock_token_2);
+                        get seen(=claimed_device, =topic, =sequence) in (
+                            out(gateway_lock_2, lock_token_2)
+                        ) else (
+                            insert seen(claimed_device, topic, sequence);
+                            out(gateway_lock_2, lock_token_2);
+                            event gateway_validated(claimed_device, topic, payload, sequence, timestamp);
+                            out(provenance_ch, (claimed_device, topic, payload, sequence, timestamp));
+                            out(state_ch, (claimed_device, topic, payload, sequence, timestamp));
+                            event gateway_accept(claimed_device, topic, payload, sequence, timestamp)
+                        )
+                    )
+                )
+            )
+        )
+    ).
+
+process
+    out(gateway_lock_1, lock_token_1)
+  | out(gateway_lock_2, lock_token_2)
+  | Sensor1
+  | Sensor2
+  | SecurePublisher1
+  | SecurePublisher2
+  | Broker
+  | ProvenanceManager
+  | DTStateManager
+  | Gateway

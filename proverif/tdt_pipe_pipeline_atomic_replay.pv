@@ -1,0 +1,237 @@
+(* Bounded symbolic replay model for the TDT-Pipe pipeline with an atomic
+   sequential gateway.
+
+   This model complements tdt_pipe_pipeline.pv. The replicated gateway in that
+   model exposes a symbolic race in ProVerif's table abstraction: two concurrent
+   gateway copies can both take the "not seen" branch before either inserts the
+   sequence value. This file models the intended gateway behavior for a
+   device-topic stream: validation and sequence-state update are performed
+   sequentially/atomically.
+
+   The model handles two gateway inputs. This is a bounded replay check, not a
+   full proof of arbitrary numeric counter monotonicity.
+*)
+
+free sensor_ch_1: channel [private].
+free sensor_ch_2: channel [private].
+free mqtt_in: channel.
+free mqtt_out: channel.
+free provenance_ch: channel [private].
+free state_ch: channel [private].
+
+free device_1: bitstring.
+free device_2: bitstring.
+free topic_1: bitstring.
+free topic_2: bitstring.
+free topic_unauthorized: bitstring.
+
+free k_1: bitstring [private].
+free k_2: bitstring [private].
+
+fun digest(bitstring): bitstring.
+fun protected_body(bitstring, bitstring, bitstring, bitstring, bitstring): bitstring.
+fun hmac(bitstring, bitstring): bitstring.
+
+event sensor_measure(bitstring, bitstring, bitstring).
+event secure_publish(bitstring, bitstring, bitstring, bitstring, bitstring).
+event gateway_validated(bitstring, bitstring, bitstring, bitstring, bitstring).
+event gateway_accept(bitstring, bitstring, bitstring, bitstring, bitstring).
+event provenance_created(bitstring, bitstring, bitstring, bitstring, bitstring).
+event dt_state_applied(bitstring, bitstring, bitstring, bitstring, bitstring).
+
+query attacker(k_1).
+query attacker(k_2).
+
+query d: bitstring, t: bitstring, p: bitstring, s: bitstring, ts: bitstring;
+      inj-event(gateway_accept(d, t, p, s, ts)) ==> inj-event(secure_publish(d, t, p, s, ts)).
+
+query d: bitstring, p: bitstring, s: bitstring, ts: bitstring;
+      event(gateway_accept(d, topic_unauthorized, p, s, ts)) ==> false.
+
+(* Reachability sanity checks for the registered device-topic streams. These
+   are not security properties; they help detect dead modeled branches. *)
+query p: bitstring, s: bitstring, ts: bitstring;
+      event(gateway_accept(device_1, topic_1, p, s, ts)).
+
+query p: bitstring, s: bitstring, ts: bitstring;
+      event(gateway_accept(device_2, topic_2, p, s, ts)).
+
+query d: bitstring, t: bitstring, p: bitstring, s: bitstring, ts: bitstring;
+      event(gateway_accept(d, t, p, s, ts)) ==> event(sensor_measure(d, t, p)).
+
+query d: bitstring, t: bitstring, p: bitstring, s: bitstring, ts: bitstring;
+      event(provenance_created(d, t, p, s, ts)) ==> event(gateway_validated(d, t, p, s, ts)).
+
+query d: bitstring, t: bitstring, p: bitstring, s: bitstring, ts: bitstring;
+      event(dt_state_applied(d, t, p, s, ts)) ==> event(gateway_validated(d, t, p, s, ts)).
+
+let Sensor1 =
+    !
+    new payload: bitstring;
+    event sensor_measure(device_1, topic_1, payload);
+    out(sensor_ch_1, payload).
+
+let Sensor2 =
+    !
+    new payload: bitstring;
+    event sensor_measure(device_2, topic_2, payload);
+    out(sensor_ch_2, payload).
+
+let SecurePublisher1 =
+    !
+    in(sensor_ch_1, payload: bitstring);
+    new timestamp: bitstring;
+    new sequence: bitstring;
+    let payload_digest = digest(payload) in
+    let body = protected_body(device_1, topic_1, timestamp, sequence, payload_digest) in
+    let tag = hmac(k_1, body) in
+    event secure_publish(device_1, topic_1, payload, sequence, timestamp);
+    out(mqtt_in, (device_1, topic_1, timestamp, sequence, payload, payload_digest, tag)).
+
+let SecurePublisher2 =
+    !
+    in(sensor_ch_2, payload: bitstring);
+    new timestamp: bitstring;
+    new sequence: bitstring;
+    let payload_digest = digest(payload) in
+    let body = protected_body(device_2, topic_2, timestamp, sequence, payload_digest) in
+    let tag = hmac(k_2, body) in
+    event secure_publish(device_2, topic_2, payload, sequence, timestamp);
+    out(mqtt_in, (device_2, topic_2, timestamp, sequence, payload, payload_digest, tag)).
+
+let Broker =
+    !
+    in(mqtt_in, (
+        claimed_device: bitstring,
+        topic: bitstring,
+        timestamp: bitstring,
+        sequence: bitstring,
+        payload: bitstring,
+        payload_digest: bitstring,
+        tag: bitstring
+    ));
+    out(mqtt_out, (claimed_device, topic, timestamp, sequence, payload, payload_digest, tag)).
+
+let ProvenanceManager =
+    !
+    in(provenance_ch, (d: bitstring, t: bitstring, p: bitstring, s: bitstring, ts: bitstring));
+    event provenance_created(d, t, p, s, ts).
+
+let DTStateManager =
+    !
+    in(state_ch, (d: bitstring, t: bitstring, p: bitstring, s: bitstring, ts: bitstring));
+    event dt_state_applied(d, t, p, s, ts).
+
+let GatewaySecondInputWithSeen(seen_device: bitstring, seen_topic: bitstring, seen_sequence: bitstring) =
+    in(mqtt_out, (
+        claimed_device_b: bitstring,
+        topic_b: bitstring,
+        timestamp_b: bitstring,
+        sequence_b: bitstring,
+        payload_b: bitstring,
+        received_digest_b: bitstring,
+        received_tag_b: bitstring
+    ));
+    (if claimed_device_b = device_1 then (
+        if topic_b = topic_1 then (
+            if received_digest_b = digest(payload_b) then (
+                if received_tag_b = hmac(k_1, protected_body(claimed_device_b, topic_b, timestamp_b, sequence_b, received_digest_b)) then (
+                    if claimed_device_b = seen_device then (
+                        if topic_b = seen_topic then (
+                            if sequence_b = seen_sequence then 0 else
+                            event gateway_validated(claimed_device_b, topic_b, payload_b, sequence_b, timestamp_b);
+                            out(provenance_ch, (claimed_device_b, topic_b, payload_b, sequence_b, timestamp_b));
+                            out(state_ch, (claimed_device_b, topic_b, payload_b, sequence_b, timestamp_b));
+                            event gateway_accept(claimed_device_b, topic_b, payload_b, sequence_b, timestamp_b)
+                        ) else (
+                            event gateway_validated(claimed_device_b, topic_b, payload_b, sequence_b, timestamp_b);
+                            out(provenance_ch, (claimed_device_b, topic_b, payload_b, sequence_b, timestamp_b));
+                            out(state_ch, (claimed_device_b, topic_b, payload_b, sequence_b, timestamp_b));
+                            event gateway_accept(claimed_device_b, topic_b, payload_b, sequence_b, timestamp_b)
+                        )
+                    ) else (
+                        event gateway_validated(claimed_device_b, topic_b, payload_b, sequence_b, timestamp_b);
+                        out(provenance_ch, (claimed_device_b, topic_b, payload_b, sequence_b, timestamp_b));
+                        out(state_ch, (claimed_device_b, topic_b, payload_b, sequence_b, timestamp_b));
+                        event gateway_accept(claimed_device_b, topic_b, payload_b, sequence_b, timestamp_b)
+                    )
+                )
+            )
+        )
+    ) else (
+        if claimed_device_b = device_2 then (
+            if topic_b = topic_2 then (
+                if received_digest_b = digest(payload_b) then (
+                    if received_tag_b = hmac(k_2, protected_body(claimed_device_b, topic_b, timestamp_b, sequence_b, received_digest_b)) then (
+                        if claimed_device_b = seen_device then (
+                            if topic_b = seen_topic then (
+                                if sequence_b = seen_sequence then 0 else
+                                event gateway_validated(claimed_device_b, topic_b, payload_b, sequence_b, timestamp_b);
+                                out(provenance_ch, (claimed_device_b, topic_b, payload_b, sequence_b, timestamp_b));
+                                out(state_ch, (claimed_device_b, topic_b, payload_b, sequence_b, timestamp_b));
+                                event gateway_accept(claimed_device_b, topic_b, payload_b, sequence_b, timestamp_b)
+                            ) else (
+                                event gateway_validated(claimed_device_b, topic_b, payload_b, sequence_b, timestamp_b);
+                                out(provenance_ch, (claimed_device_b, topic_b, payload_b, sequence_b, timestamp_b));
+                                out(state_ch, (claimed_device_b, topic_b, payload_b, sequence_b, timestamp_b));
+                                event gateway_accept(claimed_device_b, topic_b, payload_b, sequence_b, timestamp_b)
+                            )
+                        ) else (
+                            event gateway_validated(claimed_device_b, topic_b, payload_b, sequence_b, timestamp_b);
+                            out(provenance_ch, (claimed_device_b, topic_b, payload_b, sequence_b, timestamp_b));
+                            out(state_ch, (claimed_device_b, topic_b, payload_b, sequence_b, timestamp_b));
+                            event gateway_accept(claimed_device_b, topic_b, payload_b, sequence_b, timestamp_b)
+                        )
+                    )
+                )
+            )
+        )
+    )).
+
+let GatewayAtomicTwoInputs =
+    in(mqtt_out, (
+        claimed_device_a: bitstring,
+        topic_a: bitstring,
+        timestamp_a: bitstring,
+        sequence_a: bitstring,
+        payload_a: bitstring,
+        received_digest_a: bitstring,
+        received_tag_a: bitstring
+    ));
+    if claimed_device_a = device_1 then (
+        if topic_a = topic_1 then (
+            if received_digest_a = digest(payload_a) then (
+                if received_tag_a = hmac(k_1, protected_body(claimed_device_a, topic_a, timestamp_a, sequence_a, received_digest_a)) then (
+                    event gateway_validated(claimed_device_a, topic_a, payload_a, sequence_a, timestamp_a);
+                    out(provenance_ch, (claimed_device_a, topic_a, payload_a, sequence_a, timestamp_a));
+                    out(state_ch, (claimed_device_a, topic_a, payload_a, sequence_a, timestamp_a));
+                    event gateway_accept(claimed_device_a, topic_a, payload_a, sequence_a, timestamp_a);
+                    GatewaySecondInputWithSeen(claimed_device_a, topic_a, sequence_a)
+                )
+            )
+        )
+    ) else (
+        if claimed_device_a = device_2 then (
+            if topic_a = topic_2 then (
+                if received_digest_a = digest(payload_a) then (
+                    if received_tag_a = hmac(k_2, protected_body(claimed_device_a, topic_a, timestamp_a, sequence_a, received_digest_a)) then (
+                        event gateway_validated(claimed_device_a, topic_a, payload_a, sequence_a, timestamp_a);
+                        out(provenance_ch, (claimed_device_a, topic_a, payload_a, sequence_a, timestamp_a));
+                        out(state_ch, (claimed_device_a, topic_a, payload_a, sequence_a, timestamp_a));
+                        event gateway_accept(claimed_device_a, topic_a, payload_a, sequence_a, timestamp_a);
+                        GatewaySecondInputWithSeen(claimed_device_a, topic_a, sequence_a)
+                    )
+                )
+            )
+        )
+    ).
+
+process
+    Sensor1
+  | Sensor2
+  | SecurePublisher1
+  | SecurePublisher2
+  | Broker
+  | ProvenanceManager
+  | DTStateManager
+  | GatewayAtomicTwoInputs

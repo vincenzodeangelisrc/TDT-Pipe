@@ -1,0 +1,73 @@
+Process 0 (that is, the initial process):
+(
+    {1}!
+    {2}new payload: bitstring;
+    {3}new timestamp: bitstring;
+    {4}new sequence: bitstring;
+    {5}let payload_digest: bitstring = digest(payload) in
+    {6}let body: bitstring = protected_body(device_d,topic_authorized,timestamp,sequence,payload_digest) in
+    {7}let tag: bitstring = hmac(k_d,body) in
+    {8}event device_publish(device_d,topic_authorized,payload,sequence);
+    {9}out(net, (device_d,topic_authorized,timestamp,sequence,payload,payload_digest,tag))
+) | (
+    {10}!
+    {11}in(net, (claimed_device: bitstring,topic: bitstring,timestamp_1: bitstring,sequence_1: bitstring,payload_1: bitstring,received_digest: bitstring,received_tag: bitstring));
+    {12}if (claimed_device = device_d) then
+    {13}if (topic = topic_authorized) then
+    {14}if (received_digest = digest(payload_1)) then
+    {15}if (received_tag = hmac(k_d,protected_body(claimed_device,topic,timestamp_1,sequence_1,received_digest))) then
+    {16}event gateway_accept(claimed_device,topic,payload_1,sequence_1)
+)
+
+--  Process 1 (that is, process 0, with let moved downwards):
+(
+    {1}!
+    {2}new payload: bitstring;
+    {3}new timestamp: bitstring;
+    {4}new sequence: bitstring;
+    {8}event device_publish(device_d,topic_authorized,payload,sequence);
+    {5}let payload_digest: bitstring = digest(payload) in
+    {6}let body: bitstring = protected_body(device_d,topic_authorized,timestamp,sequence,payload_digest) in
+    {7}let tag: bitstring = hmac(k_d,body) in
+    {9}out(net, (device_d,topic_authorized,timestamp,sequence,payload,payload_digest,tag))
+) | (
+    {10}!
+    {11}in(net, (claimed_device: bitstring,topic: bitstring,timestamp_1: bitstring,sequence_1: bitstring,payload_1: bitstring,received_digest: bitstring,received_tag: bitstring));
+    {12}if (claimed_device = device_d) then
+    {13}if (topic = topic_authorized) then
+    {14}if (received_digest = digest(payload_1)) then
+    {15}if (received_tag = hmac(k_d,protected_body(claimed_device,topic,timestamp_1,sequence_1,received_digest))) then
+    {16}event gateway_accept(claimed_device,topic,payload_1,sequence_1)
+)
+
+-- Query not attacker(k_d[]) in process 1.
+Translating the process into Horn clauses...
+Completing...
+Starting query not attacker(k_d[])
+RESULT not attacker(k_d[]) is true.
+-- Query event(gateway_accept(d,t,p,s)) ==> event(device_publish(d,t,p,s)) in process 1.
+Translating the process into Horn clauses...
+Completing...
+Starting query event(gateway_accept(d,t,p,s)) ==> event(device_publish(d,t,p,s))
+goal reachable: b-event(device_publish(device_d[],topic_authorized[],payload_2,sequence_2)) -> event(gateway_accept(device_d[],topic_authorized[],payload_2,sequence_2))
+Abbreviations:
+payload_2 = payload[!1 = @sid]
+sequence_2 = sequence[!1 = @sid]
+RESULT event(gateway_accept(d,t,p,s)) ==> event(device_publish(d,t,p,s)) is true.
+-- Query not event(gateway_accept(d,topic_unauthorized[],p,s)) in process 1.
+Translating the process into Horn clauses...
+Completing...
+Starting query not event(gateway_accept(d,topic_unauthorized[],p,s))
+RESULT not event(gateway_accept(d,topic_unauthorized[],p,s)) is true.
+
+--------------------------------------------------------------
+Verification summary:
+
+Query not attacker(k_d[]) is true.
+
+Query event(gateway_accept(d,t,p,s)) ==> event(device_publish(d,t,p,s)) is true.
+
+Query not event(gateway_accept(d,topic_unauthorized[],p,s)) is true.
+
+--------------------------------------------------------------
+

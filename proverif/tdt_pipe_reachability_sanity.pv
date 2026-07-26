@@ -1,0 +1,59 @@
+(* Bounded honest reachability sanity model for TDT-Pipe.
+
+   This file is intentionally not an attacker-resistance proof. It only checks
+   that the two registered device-topic flows used in the richer symbolic model
+   can reach gateway acceptance in a direct honest execution. The security
+   properties are verified in the Dolev-Yao models.
+*)
+
+free device_1: bitstring.
+free device_2: bitstring.
+free topic_1: bitstring.
+free topic_2: bitstring.
+
+free payload_1: bitstring [private].
+free payload_2: bitstring [private].
+free timestamp_1: bitstring [private].
+free timestamp_2: bitstring [private].
+free sequence_1: bitstring [private].
+free sequence_2: bitstring [private].
+
+free k_1: bitstring [private].
+free k_2: bitstring [private].
+
+fun digest(bitstring): bitstring.
+fun protected_body(bitstring, bitstring, bitstring, bitstring, bitstring): bitstring.
+fun hmac(bitstring, bitstring): bitstring.
+
+event sensor_measure(bitstring, bitstring, bitstring).
+event secure_publish(bitstring, bitstring, bitstring, bitstring, bitstring).
+event gateway_accept(bitstring, bitstring, bitstring, bitstring, bitstring).
+
+query event(gateway_accept(device_1, topic_1, payload_1, sequence_1, timestamp_1)).
+query event(gateway_accept(device_2, topic_2, payload_2, sequence_2, timestamp_2)).
+
+let HonestFlow1 =
+    event sensor_measure(device_1, topic_1, payload_1);
+    let payload_digest = digest(payload_1) in
+    let tag = hmac(k_1, protected_body(device_1, topic_1, timestamp_1, sequence_1, payload_digest)) in
+    event secure_publish(device_1, topic_1, payload_1, sequence_1, timestamp_1);
+    if payload_digest = digest(payload_1) then (
+        if tag = hmac(k_1, protected_body(device_1, topic_1, timestamp_1, sequence_1, payload_digest)) then (
+            event gateway_accept(device_1, topic_1, payload_1, sequence_1, timestamp_1)
+        )
+    ).
+
+let HonestFlow2 =
+    event sensor_measure(device_2, topic_2, payload_2);
+    let payload_digest = digest(payload_2) in
+    let tag = hmac(k_2, protected_body(device_2, topic_2, timestamp_2, sequence_2, payload_digest)) in
+    event secure_publish(device_2, topic_2, payload_2, sequence_2, timestamp_2);
+    if payload_digest = digest(payload_2) then (
+        if tag = hmac(k_2, protected_body(device_2, topic_2, timestamp_2, sequence_2, payload_digest)) then (
+            event gateway_accept(device_2, topic_2, payload_2, sequence_2, timestamp_2)
+        )
+    ).
+
+process
+    HonestFlow1
+  | HonestFlow2

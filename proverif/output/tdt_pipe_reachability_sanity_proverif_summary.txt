@@ -1,0 +1,2 @@
+RESULT not event(gateway_accept(device_1[],topic_1[],payload_1[],sequence_1[],timestamp_1[])) is false.
+RESULT not event(gateway_accept(device_2[],topic_2[],payload_2[],sequence_2[],timestamp_2[])) is false.

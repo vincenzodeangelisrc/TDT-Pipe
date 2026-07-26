@@ -1,0 +1,110 @@
+Process 0 (that is, the initial process):
+(
+    {1}event sensor_measure(device_1,topic_1,payload_1);
+    {2}let payload_digest: bitstring = digest(payload_1) in
+    {3}let tag: bitstring = hmac(k_1,protected_body(device_1,topic_1,timestamp_1,sequence_1,payload_digest)) in
+    {4}event secure_publish(device_1,topic_1,payload_1,sequence_1,timestamp_1);
+    {5}if (payload_digest = digest(payload_1)) then
+    {6}if (tag = hmac(k_1,protected_body(device_1,topic_1,timestamp_1,sequence_1,payload_digest))) then
+    {7}event gateway_accept(device_1,topic_1,payload_1,sequence_1,timestamp_1)
+) | (
+    {8}event sensor_measure(device_2,topic_2,payload_2);
+    {9}let payload_digest_1: bitstring = digest(payload_2) in
+    {10}let tag_1: bitstring = hmac(k_2,protected_body(device_2,topic_2,timestamp_2,sequence_2,payload_digest_1)) in
+    {11}event secure_publish(device_2,topic_2,payload_2,sequence_2,timestamp_2);
+    {12}if (payload_digest_1 = digest(payload_2)) then
+    {13}if (tag_1 = hmac(k_2,protected_body(device_2,topic_2,timestamp_2,sequence_2,payload_digest_1))) then
+    {14}event gateway_accept(device_2,topic_2,payload_2,sequence_2,timestamp_2)
+)
+
+--  Process 1 (that is, process 0, with let moved downwards):
+(
+    {1}event sensor_measure(device_1,topic_1,payload_1);
+    {4}event secure_publish(device_1,topic_1,payload_1,sequence_1,timestamp_1);
+    {2}let payload_digest: bitstring = digest(payload_1) in
+    {5}if (payload_digest = digest(payload_1)) then
+    {3}let tag: bitstring = hmac(k_1,protected_body(device_1,topic_1,timestamp_1,sequence_1,payload_digest)) in
+    {6}if (tag = hmac(k_1,protected_body(device_1,topic_1,timestamp_1,sequence_1,payload_digest))) then
+    {7}event gateway_accept(device_1,topic_1,payload_1,sequence_1,timestamp_1)
+) | (
+    {8}event sensor_measure(device_2,topic_2,payload_2);
+    {11}event secure_publish(device_2,topic_2,payload_2,sequence_2,timestamp_2);
+    {9}let payload_digest_1: bitstring = digest(payload_2) in
+    {12}if (payload_digest_1 = digest(payload_2)) then
+    {10}let tag_1: bitstring = hmac(k_2,protected_body(device_2,topic_2,timestamp_2,sequence_2,payload_digest_1)) in
+    {13}if (tag_1 = hmac(k_2,protected_body(device_2,topic_2,timestamp_2,sequence_2,payload_digest_1))) then
+    {14}event gateway_accept(device_2,topic_2,payload_2,sequence_2,timestamp_2)
+)
+
+-- Query not event(gateway_accept(device_1[],topic_1[],payload_1[],sequence_1[],timestamp_1[])) in process 1.
+Translating the process into Horn clauses...
+Completing...
+Starting query not event(gateway_accept(device_1[],topic_1[],payload_1[],sequence_1[],timestamp_1[]))
+goal reachable: event(gateway_accept(device_1[],topic_1[],payload_1[],sequence_1[],timestamp_1[]))
+
+Derivation:
+
+1. Event gateway_accept(device_1[],topic_1[],payload_1[],sequence_1[],timestamp_1[]) may be executed at {7}.
+event(gateway_accept(device_1[],topic_1[],payload_1[],sequence_1[],timestamp_1[])).
+
+2. By 1, event(gateway_accept(device_1[],topic_1[],payload_1[],sequence_1[],timestamp_1[])).
+The goal is reached, represented in the following fact:
+event(gateway_accept(device_1[],topic_1[],payload_1[],sequence_1[],timestamp_1[])).
+
+
+A more detailed output of the traces is available with
+  set traceDisplay = long.
+
+event sensor_measure(device_2,topic_2,payload_2) at {8}
+
+event secure_publish(device_2,topic_2,payload_2,sequence_2,timestamp_2) at {11}
+
+event gateway_accept(device_2,topic_2,payload_2,sequence_2,timestamp_2) at {14}
+
+event sensor_measure(device_1,topic_1,payload_1) at {1}
+
+event secure_publish(device_1,topic_1,payload_1,sequence_1,timestamp_1) at {4}
+
+event gateway_accept(device_1,topic_1,payload_1,sequence_1,timestamp_1) at {7} (goal)
+
+The event gateway_accept(device_1,topic_1,payload_1,sequence_1,timestamp_1) is executed at {7}.
+A trace has been found.
+RESULT not event(gateway_accept(device_1[],topic_1[],payload_1[],sequence_1[],timestamp_1[])) is false.
+-- Query not event(gateway_accept(device_2[],topic_2[],payload_2[],sequence_2[],timestamp_2[])) in process 1.
+Translating the process into Horn clauses...
+Completing...
+Starting query not event(gateway_accept(device_2[],topic_2[],payload_2[],sequence_2[],timestamp_2[]))
+goal reachable: event(gateway_accept(device_2[],topic_2[],payload_2[],sequence_2[],timestamp_2[]))
+
+Derivation:
+
+1. Event gateway_accept(device_2[],topic_2[],payload_2[],sequence_2[],timestamp_2[]) may be executed at {14}.
+event(gateway_accept(device_2[],topic_2[],payload_2[],sequence_2[],timestamp_2[])).
+
+2. By 1, event(gateway_accept(device_2[],topic_2[],payload_2[],sequence_2[],timestamp_2[])).
+The goal is reached, represented in the following fact:
+event(gateway_accept(device_2[],topic_2[],payload_2[],sequence_2[],timestamp_2[])).
+
+
+A more detailed output of the traces is available with
+  set traceDisplay = long.
+
+event sensor_measure(device_2,topic_2,payload_2) at {8}
+
+event secure_publish(device_2,topic_2,payload_2,sequence_2,timestamp_2) at {11}
+
+event gateway_accept(device_2,topic_2,payload_2,sequence_2,timestamp_2) at {14} (goal)
+
+The event gateway_accept(device_2,topic_2,payload_2,sequence_2,timestamp_2) is executed at {14}.
+A trace has been found.
+RESULT not event(gateway_accept(device_2[],topic_2[],payload_2[],sequence_2[],timestamp_2[])) is false.
+
+--------------------------------------------------------------
+Verification summary:
+
+Query not event(gateway_accept(device_1[],topic_1[],payload_1[],sequence_1[],timestamp_1[])) is false.
+
+Query not event(gateway_accept(device_2[],topic_2[],payload_2[],sequence_2[],timestamp_2[])) is false.
+
+--------------------------------------------------------------
+

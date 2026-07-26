@@ -1,3 +1,0 @@
-RESULT not attacker(k_d[]) is true.
-RESULT event(gateway_accept(d,t,p,s)) ==> event(device_publish(d,t,p,s)) is true.
-RESULT not event(gateway_accept(d,topic_unauthorized[],p,s)) is true.

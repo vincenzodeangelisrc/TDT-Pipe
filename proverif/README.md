@@ -1,23 +1,24 @@
 # TDT-Pipe ProVerif Models
 
-This folder contains ProVerif models of the TDT-Pipe message-authentication
-core and of the validated telemetry pipeline.
+This folder contains three ProVerif models of the TDT-Pipe validated telemetry
+pipeline.
 
 ## Files
 
-- `tdt_pipe_core.pv`: compact single-device model of payload integrity, HMAC
-  authentication, and topic binding.
-- `tdt_pipe_reachability_sanity.pv`: bounded honest-execution sanity model used
-  only to check that both registered device-topic streams can reach gateway
-  acceptance. It is not used as an attacker-resistance proof.
 - `tdt_pipe_pipeline.pv`: richer actor-chain model with two devices, secure
   publishers, an untrusted broker channel, registry-style gateway checks,
   provenance creation, DT-state application events, and symbolic per-stream
   private locks around the sequence-state critical section.
-- `tdt_pipe_pipeline_atomic_replay.pv`: bounded two-input version of the richer
+- `tdt_pipe_pipeline_atomic_replay.pv`: bounded two-input version of the
   pipeline model in which the already accepted sequence state is represented
-  explicitly for the second gateway input. This file is used to inspect the
-  replay-related correspondence under a sequential gateway abstraction.
+  explicitly for the second gateway input. This file checks that an exact reuse
+  of an already accepted device-topic-sequence triple cannot produce a second
+  acceptance in the bounded sequential scenario. It also includes reachability
+  checks showing that replay rejection can occur and that a distinct valid
+  second update can still be accepted.
+- `tdt_pipe_reachability_sanity.pv`: bounded honest-execution sanity model used
+  only to check that both registered device-topic streams can reach gateway
+  acceptance. It is not used as an attacker-resistance proof.
 - `run_all.py`: runs all models and stores the full ProVerif output and RESULT
   summaries.
 
@@ -38,7 +39,8 @@ know the private validation keys of non-compromised devices.
 
 ## Verified Properties
 
-Across the models, ProVerif checks the following symbolic properties:
+Across the pipeline and atomic-replay models, ProVerif checks the following
+symbolic properties:
 
 1. Device validation keys remain secret.
 2. If the gateway accepts a message, then the corresponding secure publisher
@@ -50,6 +52,9 @@ Across the models, ProVerif checks the following symbolic properties:
    update are atomic/sequential for a device-topic stream, replay protection is
    represented by rejecting a second gateway input carrying an already accepted
    device-topic-sequence triple.
+6. The replay-rejection branch is reachable for both registered streams, and the
+   bounded model can still accept a second valid update when it does not reuse
+   the stored device-topic-sequence triple.
 
 The reachability sanity model is intentionally reported separately from these
 security properties. It checks that the two honest registered streams can reach
@@ -61,21 +66,23 @@ The distinction in point 5 is important. Replay protection depends on the
 sequence-state check and update being one atomic critical section for each
 device-topic stream. The unbounded replicated gateway model
 (`tdt_pipe_pipeline.pv`) includes symbolic private per-stream locks for that
-critical section and proves the non-injective authentication, secrecy,
-authorization, sensor-origin, and state/audit correspondence queries. ProVerif
-does not prove the injective query in that unbounded model because of its
-abstraction of replicated processes and tables; the output reports that no
-concrete trace is found for the derivation.
+critical section and proves secrecy, non-injective authentication,
+authorization, sensor-origin, and state/audit correspondence queries. The model
+does not claim a global injective authentication theorem for the replicated
+gateway process; replay is instead checked in the focused bounded model below.
 The bounded `tdt_pipe_pipeline_atomic_replay.pv` model makes the same atomicity
-assumption explicit for two gateway inputs, which is the representative replay
-pattern. In the current model, ProVerif proves the non-injective authentication,
-secrecy, authorization, sensor-origin, and state/audit correspondence queries.
-It still reports the injective correspondence query as not proved, without
-producing a concrete attack trace. Therefore, the ProVerif evidence should be
-reported as a symbolic validation of authentication, integrity, topic binding,
-and validated admission to provenance/state, while replay resistance should be
-stated as relying on an atomic implementation of the sequence-state check and
-update.
+assumption explicit for two gateway inputs, which is the representative exact
+replay pattern. In this bounded model, ProVerif proves secrecy,
+non-injective authentication, authorization, sensor-origin linkage, and the
+absence of a second acceptance when the second input reuses the already accepted
+device-topic-sequence triple. The same model also checks that the replay branch
+is not dead: ProVerif reconstructs traces in which an exact replay reaches
+`replay_rejected` for both registered streams. A further reachability query
+shows that a distinct second valid update can still reach
+`gateway_second_accept`, so the model is not proving replay safety by rejecting
+all second inputs. These results do not extend to an unbounded number of
+gateway inputs, numeric sequence monotonicity, timestamp-window validation, or
+recovery after loss of sequence state.
 
 ## Scope
 
@@ -93,19 +100,19 @@ abstract away:
 
 Those aspects are handled by the formal model, security discussion, and
 experimental evaluation in the paper. The ProVerif models provide symbolic
-validation of the authentication, payload-integrity, topic-binding, and
-admission-to-state/audit core under the stated assumptions.
+validation of authentication, payload integrity, topic binding, and
+admission-to-state/audit behavior under the stated assumptions.
 
 ## Running
 
-Install ProVerif and run:
+Install ProVerif and run from this folder:
 
 ```bash
-python3 experiments/proverif/run_all.py
+python3 run_all.py
 ```
 
 Outputs are written to:
 
 ```text
-experiments/proverif/output/
+output/
 ```

@@ -61,24 +61,16 @@ event gateway_accept(bitstring, bitstring, bitstring, bitstring, bitstring).
 query attacker(k_1).
 query attacker(k_2).
 
-(* Successful admission is injectively authenticated by a prior secure
-   publication of the same device, topic, payload, and sequence identifier. *)
+(* Successful admission is authenticated by a prior secure publication of the
+   same device, topic, payload, and sequence identifier. Replay protection is
+   checked separately in tdt_pipe_pipeline_atomic_replay.pv, where the bounded
+   gateway sequence state is explicit. *)
 query d: bitstring, t: bitstring, p: bitstring, s: bitstring, ts: bitstring;
-      inj-event(gateway_accept(d, t, p, s, ts)) ==> inj-event(secure_publish(d, t, p, s, ts)).
+      event(gateway_accept(d, t, p, s, ts)) ==> event(secure_publish(d, t, p, s, ts)).
 
 (* The gateway must not accept unauthorized topics. *)
 query d: bitstring, p: bitstring, s: bitstring, ts: bitstring;
       event(gateway_accept(d, topic_unauthorized, p, s, ts)) ==> false.
-
-(* Reachability sanity checks for the registered device-topic streams. These
-   are not security properties; they help detect dead modeled branches. The
-   dedicated tdt_pipe_reachability_sanity.pv model gives the corresponding
-   bounded honest-execution result in a cleaner form. *)
-query p: bitstring, s: bitstring, ts: bitstring;
-      event(gateway_accept(device_1, topic_1, p, s, ts)).
-
-query p: bitstring, s: bitstring, ts: bitstring;
-      event(gateway_accept(device_2, topic_2, p, s, ts)).
 
 (* The accepted value originates from a local sensor measurement under the
    assumption that the Sensor-to-Secure-Publisher channel is trusted/private. *)

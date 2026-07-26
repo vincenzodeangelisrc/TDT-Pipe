@@ -9,7 +9,6 @@ from pathlib import Path
 
 
 MODELS = [
-    "tdt_pipe_core.pv",
     "tdt_pipe_reachability_sanity.pv",
     "tdt_pipe_pipeline.pv",
     "tdt_pipe_pipeline_atomic_replay.pv",

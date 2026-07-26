@@ -18,7 +18,7 @@ Process 0 (that is, the initial process):
     {14}let body: bitstring = protected_body(device_1,topic_1,timestamp,sequence,payload_digest) in
     {15}let tag: bitstring = hmac(k_1,body) in
     {16}event secure_publish(device_1,topic_1,payload_2,sequence,timestamp);
-    {17}out(mqtt_in, (device_1,topic_1,timestamp,sequence,payload_2,payload_digest,tag))
+    {17}out(mqtt, (device_1,topic_1,timestamp,sequence,payload_2,payload_digest,tag))
 ) | (
     {18}!
     {19}in(sensor_ch_2, payload_3: bitstring);
@@ -28,156 +28,116 @@ Process 0 (that is, the initial process):
     {23}let body_1: bitstring = protected_body(device_2,topic_2,timestamp_1,sequence_1,payload_digest_1) in
     {24}let tag_1: bitstring = hmac(k_2,body_1) in
     {25}event secure_publish(device_2,topic_2,payload_3,sequence_1,timestamp_1);
-    {26}out(mqtt_in, (device_2,topic_2,timestamp_1,sequence_1,payload_3,payload_digest_1,tag_1))
+    {26}out(mqtt, (device_2,topic_2,timestamp_1,sequence_1,payload_3,payload_digest_1,tag_1))
 ) | (
-    {27}!
-    {28}in(mqtt_in, (claimed_device: bitstring,topic: bitstring,timestamp_2: bitstring,sequence_2: bitstring,payload_4: bitstring,payload_digest_2: bitstring,tag_2: bitstring));
-    {29}out(mqtt_out, (claimed_device,topic,timestamp_2,sequence_2,payload_4,payload_digest_2,tag_2))
-) | (
-    {30}!
-    {31}in(provenance_ch, (d: bitstring,t: bitstring,p: bitstring,s: bitstring,ts: bitstring));
-    {32}event provenance_created(d,t,p,s,ts)
-) | (
-    {33}!
-    {34}in(state_ch, (d_1: bitstring,t_1: bitstring,p_1: bitstring,s_1: bitstring,ts_1: bitstring));
-    {35}event dt_state_applied(d_1,t_1,p_1,s_1,ts_1)
-) | (
-    {36}in(mqtt_out, (claimed_device_a: bitstring,topic_a: bitstring,timestamp_a: bitstring,sequence_a: bitstring,payload_a: bitstring,received_digest_a: bitstring,received_tag_a: bitstring));
-    {37}if (claimed_device_a = device_1) then
+    {27}in(mqtt, (claimed_device_a: bitstring,topic_a: bitstring,timestamp_a: bitstring,sequence_a: bitstring,payload_a: bitstring,received_digest_a: bitstring,received_tag_a: bitstring));
+    {28}if (claimed_device_a = device_1) then
     (
-        {38}if (topic_a = topic_1) then
-        {39}if (received_digest_a = digest(payload_a)) then
-        {40}if (received_tag_a = hmac(k_1,protected_body(claimed_device_a,topic_a,timestamp_a,sequence_a,received_digest_a))) then
-        {41}event gateway_validated(claimed_device_a,topic_a,payload_a,sequence_a,timestamp_a);
-        {42}out(provenance_ch, (claimed_device_a,topic_a,payload_a,sequence_a,timestamp_a));
-        {43}out(state_ch, (claimed_device_a,topic_a,payload_a,sequence_a,timestamp_a));
-        {44}event gateway_accept(claimed_device_a,topic_a,payload_a,sequence_a,timestamp_a);
-        {45}in(mqtt_out, (claimed_device_b: bitstring,topic_b: bitstring,timestamp_b: bitstring,sequence_b: bitstring,payload_b: bitstring,received_digest_b: bitstring,received_tag_b: bitstring));
-        {46}if (claimed_device_b = device_1) then
+        {29}if (topic_a = topic_1) then
+        {30}if (received_digest_a = digest(payload_a)) then
+        {31}if (received_tag_a = hmac(k_1,protected_body(claimed_device_a,topic_a,timestamp_a,sequence_a,received_digest_a))) then
+        {32}event gateway_first_accept(claimed_device_a,topic_a,payload_a,sequence_a,timestamp_a);
+        {33}event gateway_accept(claimed_device_a,topic_a,payload_a,sequence_a,timestamp_a);
+        {34}in(mqtt, (claimed_device_b: bitstring,topic_b: bitstring,timestamp_b: bitstring,sequence_b: bitstring,payload_b: bitstring,received_digest_b: bitstring,received_tag_b: bitstring));
+        {35}if (claimed_device_b = device_1) then
         (
-            {47}if (topic_b = topic_1) then
-            {48}if (received_digest_b = digest(payload_b)) then
-            {49}if (received_tag_b = hmac(k_1,protected_body(claimed_device_b,topic_b,timestamp_b,sequence_b,received_digest_b))) then
-            {50}if (claimed_device_b = claimed_device_a) then
+            {36}if (topic_b = topic_1) then
+            {37}if (received_digest_b = digest(payload_b)) then
+            {38}if (received_tag_b = hmac(k_1,protected_body(claimed_device_b,topic_b,timestamp_b,sequence_b,received_digest_b))) then
+            {39}if (claimed_device_b = claimed_device_a) then
             (
-                {51}if (topic_b = topic_a) then
+                {40}if (topic_b = topic_a) then
                 (
-                    {52}if (sequence_b = sequence_a) then
-                        0
+                    {41}if (sequence_b = sequence_a) then
+                        {42}event replay_rejected(claimed_device_b,topic_b,payload_b,sequence_b,timestamp_b,claimed_device_a,topic_a,sequence_a)
                     else
-                        {53}event gateway_validated(claimed_device_b,topic_b,payload_b,sequence_b,timestamp_b);
-                        {54}out(provenance_ch, (claimed_device_b,topic_b,payload_b,sequence_b,timestamp_b));
-                        {55}out(state_ch, (claimed_device_b,topic_b,payload_b,sequence_b,timestamp_b));
-                        {56}event gateway_accept(claimed_device_b,topic_b,payload_b,sequence_b,timestamp_b)
+                        {43}event gateway_second_accept(claimed_device_b,topic_b,payload_b,sequence_b,timestamp_b,claimed_device_a,topic_a,sequence_a);
+                        {44}event gateway_accept(claimed_device_b,topic_b,payload_b,sequence_b,timestamp_b)
                 )
                 else
-                    {57}event gateway_validated(claimed_device_b,topic_b,payload_b,sequence_b,timestamp_b);
-                    {58}out(provenance_ch, (claimed_device_b,topic_b,payload_b,sequence_b,timestamp_b));
-                    {59}out(state_ch, (claimed_device_b,topic_b,payload_b,sequence_b,timestamp_b));
+                    {45}event gateway_second_accept(claimed_device_b,topic_b,payload_b,sequence_b,timestamp_b,claimed_device_a,topic_a,sequence_a);
+                    {46}event gateway_accept(claimed_device_b,topic_b,payload_b,sequence_b,timestamp_b)
+            )
+            else
+                {47}event gateway_second_accept(claimed_device_b,topic_b,payload_b,sequence_b,timestamp_b,claimed_device_a,topic_a,sequence_a);
+                {48}event gateway_accept(claimed_device_b,topic_b,payload_b,sequence_b,timestamp_b)
+        )
+        else
+            {49}if (claimed_device_b = device_2) then
+            {50}if (topic_b = topic_2) then
+            {51}if (received_digest_b = digest(payload_b)) then
+            {52}if (received_tag_b = hmac(k_2,protected_body(claimed_device_b,topic_b,timestamp_b,sequence_b,received_digest_b))) then
+            {53}if (claimed_device_b = claimed_device_a) then
+            (
+                {54}if (topic_b = topic_a) then
+                (
+                    {55}if (sequence_b = sequence_a) then
+                        {56}event replay_rejected(claimed_device_b,topic_b,payload_b,sequence_b,timestamp_b,claimed_device_a,topic_a,sequence_a)
+                    else
+                        {57}event gateway_second_accept(claimed_device_b,topic_b,payload_b,sequence_b,timestamp_b,claimed_device_a,topic_a,sequence_a);
+                        {58}event gateway_accept(claimed_device_b,topic_b,payload_b,sequence_b,timestamp_b)
+                )
+                else
+                    {59}event gateway_second_accept(claimed_device_b,topic_b,payload_b,sequence_b,timestamp_b,claimed_device_a,topic_a,sequence_a);
                     {60}event gateway_accept(claimed_device_b,topic_b,payload_b,sequence_b,timestamp_b)
             )
             else
-                {61}event gateway_validated(claimed_device_b,topic_b,payload_b,sequence_b,timestamp_b);
-                {62}out(provenance_ch, (claimed_device_b,topic_b,payload_b,sequence_b,timestamp_b));
-                {63}out(state_ch, (claimed_device_b,topic_b,payload_b,sequence_b,timestamp_b));
-                {64}event gateway_accept(claimed_device_b,topic_b,payload_b,sequence_b,timestamp_b)
-        )
-        else
-            {65}if (claimed_device_b = device_2) then
-            {66}if (topic_b = topic_2) then
-            {67}if (received_digest_b = digest(payload_b)) then
-            {68}if (received_tag_b = hmac(k_2,protected_body(claimed_device_b,topic_b,timestamp_b,sequence_b,received_digest_b))) then
-            {69}if (claimed_device_b = claimed_device_a) then
-            (
-                {70}if (topic_b = topic_a) then
-                (
-                    {71}if (sequence_b = sequence_a) then
-                        0
-                    else
-                        {72}event gateway_validated(claimed_device_b,topic_b,payload_b,sequence_b,timestamp_b);
-                        {73}out(provenance_ch, (claimed_device_b,topic_b,payload_b,sequence_b,timestamp_b));
-                        {74}out(state_ch, (claimed_device_b,topic_b,payload_b,sequence_b,timestamp_b));
-                        {75}event gateway_accept(claimed_device_b,topic_b,payload_b,sequence_b,timestamp_b)
-                )
-                else
-                    {76}event gateway_validated(claimed_device_b,topic_b,payload_b,sequence_b,timestamp_b);
-                    {77}out(provenance_ch, (claimed_device_b,topic_b,payload_b,sequence_b,timestamp_b));
-                    {78}out(state_ch, (claimed_device_b,topic_b,payload_b,sequence_b,timestamp_b));
-                    {79}event gateway_accept(claimed_device_b,topic_b,payload_b,sequence_b,timestamp_b)
-            )
-            else
-                {80}event gateway_validated(claimed_device_b,topic_b,payload_b,sequence_b,timestamp_b);
-                {81}out(provenance_ch, (claimed_device_b,topic_b,payload_b,sequence_b,timestamp_b));
-                {82}out(state_ch, (claimed_device_b,topic_b,payload_b,sequence_b,timestamp_b));
-                {83}event gateway_accept(claimed_device_b,topic_b,payload_b,sequence_b,timestamp_b)
+                {61}event gateway_second_accept(claimed_device_b,topic_b,payload_b,sequence_b,timestamp_b,claimed_device_a,topic_a,sequence_a);
+                {62}event gateway_accept(claimed_device_b,topic_b,payload_b,sequence_b,timestamp_b)
     )
     else
-        {84}if (claimed_device_a = device_2) then
-        {85}if (topic_a = topic_2) then
-        {86}if (received_digest_a = digest(payload_a)) then
-        {87}if (received_tag_a = hmac(k_2,protected_body(claimed_device_a,topic_a,timestamp_a,sequence_a,received_digest_a))) then
-        {88}event gateway_validated(claimed_device_a,topic_a,payload_a,sequence_a,timestamp_a);
-        {89}out(provenance_ch, (claimed_device_a,topic_a,payload_a,sequence_a,timestamp_a));
-        {90}out(state_ch, (claimed_device_a,topic_a,payload_a,sequence_a,timestamp_a));
-        {91}event gateway_accept(claimed_device_a,topic_a,payload_a,sequence_a,timestamp_a);
-        {92}in(mqtt_out, (claimed_device_b_1: bitstring,topic_b_1: bitstring,timestamp_b_1: bitstring,sequence_b_1: bitstring,payload_b_1: bitstring,received_digest_b_1: bitstring,received_tag_b_1: bitstring));
-        {93}if (claimed_device_b_1 = device_1) then
+        {63}if (claimed_device_a = device_2) then
+        {64}if (topic_a = topic_2) then
+        {65}if (received_digest_a = digest(payload_a)) then
+        {66}if (received_tag_a = hmac(k_2,protected_body(claimed_device_a,topic_a,timestamp_a,sequence_a,received_digest_a))) then
+        {67}event gateway_first_accept(claimed_device_a,topic_a,payload_a,sequence_a,timestamp_a);
+        {68}event gateway_accept(claimed_device_a,topic_a,payload_a,sequence_a,timestamp_a);
+        {69}in(mqtt, (claimed_device_b_1: bitstring,topic_b_1: bitstring,timestamp_b_1: bitstring,sequence_b_1: bitstring,payload_b_1: bitstring,received_digest_b_1: bitstring,received_tag_b_1: bitstring));
+        {70}if (claimed_device_b_1 = device_1) then
         (
-            {94}if (topic_b_1 = topic_1) then
-            {95}if (received_digest_b_1 = digest(payload_b_1)) then
-            {96}if (received_tag_b_1 = hmac(k_1,protected_body(claimed_device_b_1,topic_b_1,timestamp_b_1,sequence_b_1,received_digest_b_1))) then
-            {97}if (claimed_device_b_1 = claimed_device_a) then
+            {71}if (topic_b_1 = topic_1) then
+            {72}if (received_digest_b_1 = digest(payload_b_1)) then
+            {73}if (received_tag_b_1 = hmac(k_1,protected_body(claimed_device_b_1,topic_b_1,timestamp_b_1,sequence_b_1,received_digest_b_1))) then
+            {74}if (claimed_device_b_1 = claimed_device_a) then
             (
-                {98}if (topic_b_1 = topic_a) then
+                {75}if (topic_b_1 = topic_a) then
                 (
-                    {99}if (sequence_b_1 = sequence_a) then
-                        0
+                    {76}if (sequence_b_1 = sequence_a) then
+                        {77}event replay_rejected(claimed_device_b_1,topic_b_1,payload_b_1,sequence_b_1,timestamp_b_1,claimed_device_a,topic_a,sequence_a)
                     else
-                        {100}event gateway_validated(claimed_device_b_1,topic_b_1,payload_b_1,sequence_b_1,timestamp_b_1);
-                        {101}out(provenance_ch, (claimed_device_b_1,topic_b_1,payload_b_1,sequence_b_1,timestamp_b_1));
-                        {102}out(state_ch, (claimed_device_b_1,topic_b_1,payload_b_1,sequence_b_1,timestamp_b_1));
-                        {103}event gateway_accept(claimed_device_b_1,topic_b_1,payload_b_1,sequence_b_1,timestamp_b_1)
+                        {78}event gateway_second_accept(claimed_device_b_1,topic_b_1,payload_b_1,sequence_b_1,timestamp_b_1,claimed_device_a,topic_a,sequence_a);
+                        {79}event gateway_accept(claimed_device_b_1,topic_b_1,payload_b_1,sequence_b_1,timestamp_b_1)
                 )
                 else
-                    {104}event gateway_validated(claimed_device_b_1,topic_b_1,payload_b_1,sequence_b_1,timestamp_b_1);
-                    {105}out(provenance_ch, (claimed_device_b_1,topic_b_1,payload_b_1,sequence_b_1,timestamp_b_1));
-                    {106}out(state_ch, (claimed_device_b_1,topic_b_1,payload_b_1,sequence_b_1,timestamp_b_1));
-                    {107}event gateway_accept(claimed_device_b_1,topic_b_1,payload_b_1,sequence_b_1,timestamp_b_1)
+                    {80}event gateway_second_accept(claimed_device_b_1,topic_b_1,payload_b_1,sequence_b_1,timestamp_b_1,claimed_device_a,topic_a,sequence_a);
+                    {81}event gateway_accept(claimed_device_b_1,topic_b_1,payload_b_1,sequence_b_1,timestamp_b_1)
             )
             else
-                {108}event gateway_validated(claimed_device_b_1,topic_b_1,payload_b_1,sequence_b_1,timestamp_b_1);
-                {109}out(provenance_ch, (claimed_device_b_1,topic_b_1,payload_b_1,sequence_b_1,timestamp_b_1));
-                {110}out(state_ch, (claimed_device_b_1,topic_b_1,payload_b_1,sequence_b_1,timestamp_b_1));
-                {111}event gateway_accept(claimed_device_b_1,topic_b_1,payload_b_1,sequence_b_1,timestamp_b_1)
+                {82}event gateway_second_accept(claimed_device_b_1,topic_b_1,payload_b_1,sequence_b_1,timestamp_b_1,claimed_device_a,topic_a,sequence_a);
+                {83}event gateway_accept(claimed_device_b_1,topic_b_1,payload_b_1,sequence_b_1,timestamp_b_1)
         )
         else
-            {112}if (claimed_device_b_1 = device_2) then
-            {113}if (topic_b_1 = topic_2) then
-            {114}if (received_digest_b_1 = digest(payload_b_1)) then
-            {115}if (received_tag_b_1 = hmac(k_2,protected_body(claimed_device_b_1,topic_b_1,timestamp_b_1,sequence_b_1,received_digest_b_1))) then
-            {116}if (claimed_device_b_1 = claimed_device_a) then
+            {84}if (claimed_device_b_1 = device_2) then
+            {85}if (topic_b_1 = topic_2) then
+            {86}if (received_digest_b_1 = digest(payload_b_1)) then
+            {87}if (received_tag_b_1 = hmac(k_2,protected_body(claimed_device_b_1,topic_b_1,timestamp_b_1,sequence_b_1,received_digest_b_1))) then
+            {88}if (claimed_device_b_1 = claimed_device_a) then
             (
-                {117}if (topic_b_1 = topic_a) then
+                {89}if (topic_b_1 = topic_a) then
                 (
-                    {118}if (sequence_b_1 = sequence_a) then
-                        0
+                    {90}if (sequence_b_1 = sequence_a) then
+                        {91}event replay_rejected(claimed_device_b_1,topic_b_1,payload_b_1,sequence_b_1,timestamp_b_1,claimed_device_a,topic_a,sequence_a)
                     else
-                        {119}event gateway_validated(claimed_device_b_1,topic_b_1,payload_b_1,sequence_b_1,timestamp_b_1);
-                        {120}out(provenance_ch, (claimed_device_b_1,topic_b_1,payload_b_1,sequence_b_1,timestamp_b_1));
-                        {121}out(state_ch, (claimed_device_b_1,topic_b_1,payload_b_1,sequence_b_1,timestamp_b_1));
-                        {122}event gateway_accept(claimed_device_b_1,topic_b_1,payload_b_1,sequence_b_1,timestamp_b_1)
+                        {92}event gateway_second_accept(claimed_device_b_1,topic_b_1,payload_b_1,sequence_b_1,timestamp_b_1,claimed_device_a,topic_a,sequence_a);
+                        {93}event gateway_accept(claimed_device_b_1,topic_b_1,payload_b_1,sequence_b_1,timestamp_b_1)
                 )
                 else
-                    {123}event gateway_validated(claimed_device_b_1,topic_b_1,payload_b_1,sequence_b_1,timestamp_b_1);
-                    {124}out(provenance_ch, (claimed_device_b_1,topic_b_1,payload_b_1,sequence_b_1,timestamp_b_1));
-                    {125}out(state_ch, (claimed_device_b_1,topic_b_1,payload_b_1,sequence_b_1,timestamp_b_1));
-                    {126}event gateway_accept(claimed_device_b_1,topic_b_1,payload_b_1,sequence_b_1,timestamp_b_1)
+                    {94}event gateway_second_accept(claimed_device_b_1,topic_b_1,payload_b_1,sequence_b_1,timestamp_b_1,claimed_device_a,topic_a,sequence_a);
+                    {95}event gateway_accept(claimed_device_b_1,topic_b_1,payload_b_1,sequence_b_1,timestamp_b_1)
             )
             else
-                {127}event gateway_validated(claimed_device_b_1,topic_b_1,payload_b_1,sequence_b_1,timestamp_b_1);
-                {128}out(provenance_ch, (claimed_device_b_1,topic_b_1,payload_b_1,sequence_b_1,timestamp_b_1));
-                {129}out(state_ch, (claimed_device_b_1,topic_b_1,payload_b_1,sequence_b_1,timestamp_b_1));
-                {130}event gateway_accept(claimed_device_b_1,topic_b_1,payload_b_1,sequence_b_1,timestamp_b_1)
+                {96}event gateway_second_accept(claimed_device_b_1,topic_b_1,payload_b_1,sequence_b_1,timestamp_b_1,claimed_device_a,topic_a,sequence_a);
+                {97}event gateway_accept(claimed_device_b_1,topic_b_1,payload_b_1,sequence_b_1,timestamp_b_1)
 )
 
 --  Process 1 (that is, process 0, with let moved downwards):
@@ -200,7 +160,7 @@ Process 0 (that is, the initial process):
     {13}let payload_digest: bitstring = digest(payload_2) in
     {14}let body: bitstring = protected_body(device_1,topic_1,timestamp,sequence,payload_digest) in
     {15}let tag: bitstring = hmac(k_1,body) in
-    {17}out(mqtt_in, (device_1,topic_1,timestamp,sequence,payload_2,payload_digest,tag))
+    {17}out(mqtt, (device_1,topic_1,timestamp,sequence,payload_2,payload_digest,tag))
 ) | (
     {18}!
     {19}in(sensor_ch_2, payload_3: bitstring);
@@ -210,156 +170,116 @@ Process 0 (that is, the initial process):
     {22}let payload_digest_1: bitstring = digest(payload_3) in
     {23}let body_1: bitstring = protected_body(device_2,topic_2,timestamp_1,sequence_1,payload_digest_1) in
     {24}let tag_1: bitstring = hmac(k_2,body_1) in
-    {26}out(mqtt_in, (device_2,topic_2,timestamp_1,sequence_1,payload_3,payload_digest_1,tag_1))
+    {26}out(mqtt, (device_2,topic_2,timestamp_1,sequence_1,payload_3,payload_digest_1,tag_1))
 ) | (
-    {27}!
-    {28}in(mqtt_in, (claimed_device: bitstring,topic: bitstring,timestamp_2: bitstring,sequence_2: bitstring,payload_4: bitstring,payload_digest_2: bitstring,tag_2: bitstring));
-    {29}out(mqtt_out, (claimed_device,topic,timestamp_2,sequence_2,payload_4,payload_digest_2,tag_2))
-) | (
-    {30}!
-    {31}in(provenance_ch, (d: bitstring,t: bitstring,p: bitstring,s: bitstring,ts: bitstring));
-    {32}event provenance_created(d,t,p,s,ts)
-) | (
-    {33}!
-    {34}in(state_ch, (d_1: bitstring,t_1: bitstring,p_1: bitstring,s_1: bitstring,ts_1: bitstring));
-    {35}event dt_state_applied(d_1,t_1,p_1,s_1,ts_1)
-) | (
-    {36}in(mqtt_out, (claimed_device_a: bitstring,topic_a: bitstring,timestamp_a: bitstring,sequence_a: bitstring,payload_a: bitstring,received_digest_a: bitstring,received_tag_a: bitstring));
-    {37}if (claimed_device_a = device_1) then
+    {27}in(mqtt, (claimed_device_a: bitstring,topic_a: bitstring,timestamp_a: bitstring,sequence_a: bitstring,payload_a: bitstring,received_digest_a: bitstring,received_tag_a: bitstring));
+    {28}if (claimed_device_a = device_1) then
     (
-        {38}if (topic_a = topic_1) then
-        {39}if (received_digest_a = digest(payload_a)) then
-        {40}if (received_tag_a = hmac(k_1,protected_body(claimed_device_a,topic_a,timestamp_a,sequence_a,received_digest_a))) then
-        {41}event gateway_validated(claimed_device_a,topic_a,payload_a,sequence_a,timestamp_a);
-        {42}out(provenance_ch, (claimed_device_a,topic_a,payload_a,sequence_a,timestamp_a));
-        {43}out(state_ch, (claimed_device_a,topic_a,payload_a,sequence_a,timestamp_a));
-        {44}event gateway_accept(claimed_device_a,topic_a,payload_a,sequence_a,timestamp_a);
-        {45}in(mqtt_out, (claimed_device_b: bitstring,topic_b: bitstring,timestamp_b: bitstring,sequence_b: bitstring,payload_b: bitstring,received_digest_b: bitstring,received_tag_b: bitstring));
-        {46}if (claimed_device_b = device_1) then
+        {29}if (topic_a = topic_1) then
+        {30}if (received_digest_a = digest(payload_a)) then
+        {31}if (received_tag_a = hmac(k_1,protected_body(claimed_device_a,topic_a,timestamp_a,sequence_a,received_digest_a))) then
+        {32}event gateway_first_accept(claimed_device_a,topic_a,payload_a,sequence_a,timestamp_a);
+        {33}event gateway_accept(claimed_device_a,topic_a,payload_a,sequence_a,timestamp_a);
+        {34}in(mqtt, (claimed_device_b: bitstring,topic_b: bitstring,timestamp_b: bitstring,sequence_b: bitstring,payload_b: bitstring,received_digest_b: bitstring,received_tag_b: bitstring));
+        {35}if (claimed_device_b = device_1) then
         (
-            {47}if (topic_b = topic_1) then
-            {48}if (received_digest_b = digest(payload_b)) then
-            {49}if (received_tag_b = hmac(k_1,protected_body(claimed_device_b,topic_b,timestamp_b,sequence_b,received_digest_b))) then
-            {50}if (claimed_device_b = claimed_device_a) then
+            {36}if (topic_b = topic_1) then
+            {37}if (received_digest_b = digest(payload_b)) then
+            {38}if (received_tag_b = hmac(k_1,protected_body(claimed_device_b,topic_b,timestamp_b,sequence_b,received_digest_b))) then
+            {39}if (claimed_device_b = claimed_device_a) then
             (
-                {51}if (topic_b = topic_a) then
+                {40}if (topic_b = topic_a) then
                 (
-                    {52}if (sequence_b = sequence_a) then
-                        0
+                    {41}if (sequence_b = sequence_a) then
+                        {42}event replay_rejected(claimed_device_b,topic_b,payload_b,sequence_b,timestamp_b,claimed_device_a,topic_a,sequence_a)
                     else
-                        {53}event gateway_validated(claimed_device_b,topic_b,payload_b,sequence_b,timestamp_b);
-                        {54}out(provenance_ch, (claimed_device_b,topic_b,payload_b,sequence_b,timestamp_b));
-                        {55}out(state_ch, (claimed_device_b,topic_b,payload_b,sequence_b,timestamp_b));
-                        {56}event gateway_accept(claimed_device_b,topic_b,payload_b,sequence_b,timestamp_b)
+                        {43}event gateway_second_accept(claimed_device_b,topic_b,payload_b,sequence_b,timestamp_b,claimed_device_a,topic_a,sequence_a);
+                        {44}event gateway_accept(claimed_device_b,topic_b,payload_b,sequence_b,timestamp_b)
                 )
                 else
-                    {57}event gateway_validated(claimed_device_b,topic_b,payload_b,sequence_b,timestamp_b);
-                    {58}out(provenance_ch, (claimed_device_b,topic_b,payload_b,sequence_b,timestamp_b));
-                    {59}out(state_ch, (claimed_device_b,topic_b,payload_b,sequence_b,timestamp_b));
+                    {45}event gateway_second_accept(claimed_device_b,topic_b,payload_b,sequence_b,timestamp_b,claimed_device_a,topic_a,sequence_a);
+                    {46}event gateway_accept(claimed_device_b,topic_b,payload_b,sequence_b,timestamp_b)
+            )
+            else
+                {47}event gateway_second_accept(claimed_device_b,topic_b,payload_b,sequence_b,timestamp_b,claimed_device_a,topic_a,sequence_a);
+                {48}event gateway_accept(claimed_device_b,topic_b,payload_b,sequence_b,timestamp_b)
+        )
+        else
+            {49}if (claimed_device_b = device_2) then
+            {50}if (topic_b = topic_2) then
+            {51}if (received_digest_b = digest(payload_b)) then
+            {52}if (received_tag_b = hmac(k_2,protected_body(claimed_device_b,topic_b,timestamp_b,sequence_b,received_digest_b))) then
+            {53}if (claimed_device_b = claimed_device_a) then
+            (
+                {54}if (topic_b = topic_a) then
+                (
+                    {55}if (sequence_b = sequence_a) then
+                        {56}event replay_rejected(claimed_device_b,topic_b,payload_b,sequence_b,timestamp_b,claimed_device_a,topic_a,sequence_a)
+                    else
+                        {57}event gateway_second_accept(claimed_device_b,topic_b,payload_b,sequence_b,timestamp_b,claimed_device_a,topic_a,sequence_a);
+                        {58}event gateway_accept(claimed_device_b,topic_b,payload_b,sequence_b,timestamp_b)
+                )
+                else
+                    {59}event gateway_second_accept(claimed_device_b,topic_b,payload_b,sequence_b,timestamp_b,claimed_device_a,topic_a,sequence_a);
                     {60}event gateway_accept(claimed_device_b,topic_b,payload_b,sequence_b,timestamp_b)
             )
             else
-                {61}event gateway_validated(claimed_device_b,topic_b,payload_b,sequence_b,timestamp_b);
-                {62}out(provenance_ch, (claimed_device_b,topic_b,payload_b,sequence_b,timestamp_b));
-                {63}out(state_ch, (claimed_device_b,topic_b,payload_b,sequence_b,timestamp_b));
-                {64}event gateway_accept(claimed_device_b,topic_b,payload_b,sequence_b,timestamp_b)
-        )
-        else
-            {65}if (claimed_device_b = device_2) then
-            {66}if (topic_b = topic_2) then
-            {67}if (received_digest_b = digest(payload_b)) then
-            {68}if (received_tag_b = hmac(k_2,protected_body(claimed_device_b,topic_b,timestamp_b,sequence_b,received_digest_b))) then
-            {69}if (claimed_device_b = claimed_device_a) then
-            (
-                {70}if (topic_b = topic_a) then
-                (
-                    {71}if (sequence_b = sequence_a) then
-                        0
-                    else
-                        {72}event gateway_validated(claimed_device_b,topic_b,payload_b,sequence_b,timestamp_b);
-                        {73}out(provenance_ch, (claimed_device_b,topic_b,payload_b,sequence_b,timestamp_b));
-                        {74}out(state_ch, (claimed_device_b,topic_b,payload_b,sequence_b,timestamp_b));
-                        {75}event gateway_accept(claimed_device_b,topic_b,payload_b,sequence_b,timestamp_b)
-                )
-                else
-                    {76}event gateway_validated(claimed_device_b,topic_b,payload_b,sequence_b,timestamp_b);
-                    {77}out(provenance_ch, (claimed_device_b,topic_b,payload_b,sequence_b,timestamp_b));
-                    {78}out(state_ch, (claimed_device_b,topic_b,payload_b,sequence_b,timestamp_b));
-                    {79}event gateway_accept(claimed_device_b,topic_b,payload_b,sequence_b,timestamp_b)
-            )
-            else
-                {80}event gateway_validated(claimed_device_b,topic_b,payload_b,sequence_b,timestamp_b);
-                {81}out(provenance_ch, (claimed_device_b,topic_b,payload_b,sequence_b,timestamp_b));
-                {82}out(state_ch, (claimed_device_b,topic_b,payload_b,sequence_b,timestamp_b));
-                {83}event gateway_accept(claimed_device_b,topic_b,payload_b,sequence_b,timestamp_b)
+                {61}event gateway_second_accept(claimed_device_b,topic_b,payload_b,sequence_b,timestamp_b,claimed_device_a,topic_a,sequence_a);
+                {62}event gateway_accept(claimed_device_b,topic_b,payload_b,sequence_b,timestamp_b)
     )
     else
-        {84}if (claimed_device_a = device_2) then
-        {85}if (topic_a = topic_2) then
-        {86}if (received_digest_a = digest(payload_a)) then
-        {87}if (received_tag_a = hmac(k_2,protected_body(claimed_device_a,topic_a,timestamp_a,sequence_a,received_digest_a))) then
-        {88}event gateway_validated(claimed_device_a,topic_a,payload_a,sequence_a,timestamp_a);
-        {89}out(provenance_ch, (claimed_device_a,topic_a,payload_a,sequence_a,timestamp_a));
-        {90}out(state_ch, (claimed_device_a,topic_a,payload_a,sequence_a,timestamp_a));
-        {91}event gateway_accept(claimed_device_a,topic_a,payload_a,sequence_a,timestamp_a);
-        {92}in(mqtt_out, (claimed_device_b_1: bitstring,topic_b_1: bitstring,timestamp_b_1: bitstring,sequence_b_1: bitstring,payload_b_1: bitstring,received_digest_b_1: bitstring,received_tag_b_1: bitstring));
-        {93}if (claimed_device_b_1 = device_1) then
+        {63}if (claimed_device_a = device_2) then
+        {64}if (topic_a = topic_2) then
+        {65}if (received_digest_a = digest(payload_a)) then
+        {66}if (received_tag_a = hmac(k_2,protected_body(claimed_device_a,topic_a,timestamp_a,sequence_a,received_digest_a))) then
+        {67}event gateway_first_accept(claimed_device_a,topic_a,payload_a,sequence_a,timestamp_a);
+        {68}event gateway_accept(claimed_device_a,topic_a,payload_a,sequence_a,timestamp_a);
+        {69}in(mqtt, (claimed_device_b_1: bitstring,topic_b_1: bitstring,timestamp_b_1: bitstring,sequence_b_1: bitstring,payload_b_1: bitstring,received_digest_b_1: bitstring,received_tag_b_1: bitstring));
+        {70}if (claimed_device_b_1 = device_1) then
         (
-            {94}if (topic_b_1 = topic_1) then
-            {95}if (received_digest_b_1 = digest(payload_b_1)) then
-            {96}if (received_tag_b_1 = hmac(k_1,protected_body(claimed_device_b_1,topic_b_1,timestamp_b_1,sequence_b_1,received_digest_b_1))) then
-            {97}if (claimed_device_b_1 = claimed_device_a) then
+            {71}if (topic_b_1 = topic_1) then
+            {72}if (received_digest_b_1 = digest(payload_b_1)) then
+            {73}if (received_tag_b_1 = hmac(k_1,protected_body(claimed_device_b_1,topic_b_1,timestamp_b_1,sequence_b_1,received_digest_b_1))) then
+            {74}if (claimed_device_b_1 = claimed_device_a) then
             (
-                {98}if (topic_b_1 = topic_a) then
+                {75}if (topic_b_1 = topic_a) then
                 (
-                    {99}if (sequence_b_1 = sequence_a) then
-                        0
+                    {76}if (sequence_b_1 = sequence_a) then
+                        {77}event replay_rejected(claimed_device_b_1,topic_b_1,payload_b_1,sequence_b_1,timestamp_b_1,claimed_device_a,topic_a,sequence_a)
                     else
-                        {100}event gateway_validated(claimed_device_b_1,topic_b_1,payload_b_1,sequence_b_1,timestamp_b_1);
-                        {101}out(provenance_ch, (claimed_device_b_1,topic_b_1,payload_b_1,sequence_b_1,timestamp_b_1));
-                        {102}out(state_ch, (claimed_device_b_1,topic_b_1,payload_b_1,sequence_b_1,timestamp_b_1));
-                        {103}event gateway_accept(claimed_device_b_1,topic_b_1,payload_b_1,sequence_b_1,timestamp_b_1)
+                        {78}event gateway_second_accept(claimed_device_b_1,topic_b_1,payload_b_1,sequence_b_1,timestamp_b_1,claimed_device_a,topic_a,sequence_a);
+                        {79}event gateway_accept(claimed_device_b_1,topic_b_1,payload_b_1,sequence_b_1,timestamp_b_1)
                 )
                 else
-                    {104}event gateway_validated(claimed_device_b_1,topic_b_1,payload_b_1,sequence_b_1,timestamp_b_1);
-                    {105}out(provenance_ch, (claimed_device_b_1,topic_b_1,payload_b_1,sequence_b_1,timestamp_b_1));
-                    {106}out(state_ch, (claimed_device_b_1,topic_b_1,payload_b_1,sequence_b_1,timestamp_b_1));
-                    {107}event gateway_accept(claimed_device_b_1,topic_b_1,payload_b_1,sequence_b_1,timestamp_b_1)
+                    {80}event gateway_second_accept(claimed_device_b_1,topic_b_1,payload_b_1,sequence_b_1,timestamp_b_1,claimed_device_a,topic_a,sequence_a);
+                    {81}event gateway_accept(claimed_device_b_1,topic_b_1,payload_b_1,sequence_b_1,timestamp_b_1)
             )
             else
-                {108}event gateway_validated(claimed_device_b_1,topic_b_1,payload_b_1,sequence_b_1,timestamp_b_1);
-                {109}out(provenance_ch, (claimed_device_b_1,topic_b_1,payload_b_1,sequence_b_1,timestamp_b_1));
-                {110}out(state_ch, (claimed_device_b_1,topic_b_1,payload_b_1,sequence_b_1,timestamp_b_1));
-                {111}event gateway_accept(claimed_device_b_1,topic_b_1,payload_b_1,sequence_b_1,timestamp_b_1)
+                {82}event gateway_second_accept(claimed_device_b_1,topic_b_1,payload_b_1,sequence_b_1,timestamp_b_1,claimed_device_a,topic_a,sequence_a);
+                {83}event gateway_accept(claimed_device_b_1,topic_b_1,payload_b_1,sequence_b_1,timestamp_b_1)
         )
         else
-            {112}if (claimed_device_b_1 = device_2) then
-            {113}if (topic_b_1 = topic_2) then
-            {114}if (received_digest_b_1 = digest(payload_b_1)) then
-            {115}if (received_tag_b_1 = hmac(k_2,protected_body(claimed_device_b_1,topic_b_1,timestamp_b_1,sequence_b_1,received_digest_b_1))) then
-            {116}if (claimed_device_b_1 = claimed_device_a) then
+            {84}if (claimed_device_b_1 = device_2) then
+            {85}if (topic_b_1 = topic_2) then
+            {86}if (received_digest_b_1 = digest(payload_b_1)) then
+            {87}if (received_tag_b_1 = hmac(k_2,protected_body(claimed_device_b_1,topic_b_1,timestamp_b_1,sequence_b_1,received_digest_b_1))) then
+            {88}if (claimed_device_b_1 = claimed_device_a) then
             (
-                {117}if (topic_b_1 = topic_a) then
+                {89}if (topic_b_1 = topic_a) then
                 (
-                    {118}if (sequence_b_1 = sequence_a) then
-                        0
+                    {90}if (sequence_b_1 = sequence_a) then
+                        {91}event replay_rejected(claimed_device_b_1,topic_b_1,payload_b_1,sequence_b_1,timestamp_b_1,claimed_device_a,topic_a,sequence_a)
                     else
-                        {119}event gateway_validated(claimed_device_b_1,topic_b_1,payload_b_1,sequence_b_1,timestamp_b_1);
-                        {120}out(provenance_ch, (claimed_device_b_1,topic_b_1,payload_b_1,sequence_b_1,timestamp_b_1));
-                        {121}out(state_ch, (claimed_device_b_1,topic_b_1,payload_b_1,sequence_b_1,timestamp_b_1));
-                        {122}event gateway_accept(claimed_device_b_1,topic_b_1,payload_b_1,sequence_b_1,timestamp_b_1)
+                        {92}event gateway_second_accept(claimed_device_b_1,topic_b_1,payload_b_1,sequence_b_1,timestamp_b_1,claimed_device_a,topic_a,sequence_a);
+                        {93}event gateway_accept(claimed_device_b_1,topic_b_1,payload_b_1,sequence_b_1,timestamp_b_1)
                 )
                 else
-                    {123}event gateway_validated(claimed_device_b_1,topic_b_1,payload_b_1,sequence_b_1,timestamp_b_1);
-                    {124}out(provenance_ch, (claimed_device_b_1,topic_b_1,payload_b_1,sequence_b_1,timestamp_b_1));
-                    {125}out(state_ch, (claimed_device_b_1,topic_b_1,payload_b_1,sequence_b_1,timestamp_b_1));
-                    {126}event gateway_accept(claimed_device_b_1,topic_b_1,payload_b_1,sequence_b_1,timestamp_b_1)
+                    {94}event gateway_second_accept(claimed_device_b_1,topic_b_1,payload_b_1,sequence_b_1,timestamp_b_1,claimed_device_a,topic_a,sequence_a);
+                    {95}event gateway_accept(claimed_device_b_1,topic_b_1,payload_b_1,sequence_b_1,timestamp_b_1)
             )
             else
-                {127}event gateway_validated(claimed_device_b_1,topic_b_1,payload_b_1,sequence_b_1,timestamp_b_1);
-                {128}out(provenance_ch, (claimed_device_b_1,topic_b_1,payload_b_1,sequence_b_1,timestamp_b_1));
-                {129}out(state_ch, (claimed_device_b_1,topic_b_1,payload_b_1,sequence_b_1,timestamp_b_1));
-                {130}event gateway_accept(claimed_device_b_1,topic_b_1,payload_b_1,sequence_b_1,timestamp_b_1)
+                {96}event gateway_second_accept(claimed_device_b_1,topic_b_1,payload_b_1,sequence_b_1,timestamp_b_1,claimed_device_a,topic_a,sequence_a);
+                {97}event gateway_accept(claimed_device_b_1,topic_b_1,payload_b_1,sequence_b_1,timestamp_b_1)
 )
 
 -- Query not attacker(k_1[]) in process 1.
@@ -372,203 +292,109 @@ Translating the process into Horn clauses...
 Completing...
 Starting query not attacker(k_2[])
 RESULT not attacker(k_2[]) is true.
--- Query inj-event(gateway_accept(d_2,t_2,p_2,s_2,ts_2)) ==> inj-event(secure_publish(d_2,t_2,p_2,s_2,ts_2)) in process 1.
+-- Query event(gateway_accept(d,t,p,s,ts)) ==> event(secure_publish(d,t,p,s,ts)) in process 1.
 Translating the process into Horn clauses...
 Completing...
-200 rules inserted. Base: 100 rules (36 with conclusion selected). Queue: 4 rules.
-Starting query inj-event(gateway_accept(d_2,t_2,p_2,s_2,ts_2)) ==> inj-event(secure_publish(d_2,t_2,p_2,s_2,ts_2))
-goal reachable: (@sid ≠ @sid_1 | @sid_2 ≠ @sid_3) && b-inj-event(secure_publish(device_2[],topic_2[],payload_5,sequence_3,timestamp_3),@occ25_1) && b-inj-event(secure_publish(device_2[],topic_2[],payload_6,sequence_4,timestamp_4),@occ25_2) -> inj-event(gateway_accept(device_2[],topic_2[],payload_5,sequence_3,timestamp_3),@occ91_1) && inj-event(gateway_accept(device_2[],topic_2[],payload_5,sequence_3,timestamp_3),@occ122_1)
+Starting query event(gateway_accept(d,t,p,s,ts)) ==> event(secure_publish(d,t,p,s,ts))
+goal reachable: b-event(secure_publish(device_2[],topic_2[],payload_4,sequence_2,timestamp_2)) -> event(gateway_accept(device_2[],topic_2[],payload_4,sequence_2,timestamp_2))
 Abbreviations:
-payload_5 = payload_1[!1 = @sid_3]
-sequence_3 = sequence_1[payload_3 = payload_5,!1 = @sid_1]
-timestamp_3 = timestamp_1[payload_3 = payload_5,!1 = @sid_1]
-@occ91_1 = @occ91[received_tag_a = hmac(k_2[],protected_body(device_2[],topic_2[],timestamp_3,sequence_3,digest(payload_5))),received_digest_a = digest(payload_5),payload_a = payload_5,sequence_a = sequence_3,timestamp_a = timestamp_3,topic_a = topic_2[],claimed_device_a = device_2[]]
-payload_6 = payload_1[!1 = @sid_2]
-timestamp_4 = timestamp_1[payload_3 = payload_6,!1 = @sid]
-sequence_4 = sequence_1[payload_3 = payload_6,!1 = @sid]
-@occ122_1 = @occ122[received_tag_b_1 = hmac(k_2[],protected_body(device_2[],topic_2[],timestamp_3,sequence_3,digest(payload_5))),received_digest_b_1 = digest(payload_5),payload_b_1 = payload_5,sequence_b_1 = sequence_3,timestamp_b_1 = timestamp_3,topic_b_1 = topic_2[],claimed_device_b_1 = device_2[],received_tag_a = hmac(k_2[],protected_body(device_2[],topic_2[],timestamp_4,sequence_4,digest(payload_6))),received_digest_a = digest(payload_6),payload_a = payload_6,sequence_a = sequence_4,timestamp_a = timestamp_4,topic_a = topic_2[],claimed_device_a = device_2[]]
-@occ25_1 = @occ25[payload_3 = payload_5,!1 = @sid_1]
-@occ25_2 = @occ25[payload_3 = payload_6,!1 = @sid]
+payload_4 = payload_1[!1 = @sid]
+sequence_2 = sequence_1[payload_3 = payload_4,!1 = @sid_1]
+timestamp_2 = timestamp_1[payload_3 = payload_4,!1 = @sid_1]
+goal reachable: b-event(secure_publish(device_1[],topic_1[],payload_4,sequence_2,timestamp_2)) -> event(gateway_accept(device_1[],topic_1[],payload_4,sequence_2,timestamp_2))
+Abbreviations:
+payload_4 = payload[!1 = @sid]
+sequence_2 = sequence[payload_2 = payload_4,!1 = @sid_1]
+timestamp_2 = timestamp[payload_2 = payload_4,!1 = @sid_1]
+RESULT event(gateway_accept(d,t,p,s,ts)) ==> event(secure_publish(d,t,p,s,ts)) is true.
+-- Query not event(gateway_accept(d,topic_unauthorized[],p,s,ts)) in process 1.
+Translating the process into Horn clauses...
+Completing...
+Starting query not event(gateway_accept(d,topic_unauthorized[],p,s,ts))
+RESULT not event(gateway_accept(d,topic_unauthorized[],p,s,ts)) is true.
+-- Query event(gateway_accept(d,t,p,s,ts)) ==> event(sensor_measure(d,t,p)) in process 1.
+Translating the process into Horn clauses...
+Completing...
+Starting query event(gateway_accept(d,t,p,s,ts)) ==> event(sensor_measure(d,t,p))
+goal reachable: b-event(sensor_measure(device_2[],topic_2[],payload_4)) -> event(gateway_accept(device_2[],topic_2[],payload_4,sequence_2,timestamp_2))
+Abbreviations:
+payload_4 = payload_1[!1 = @sid]
+sequence_2 = sequence_1[payload_3 = payload_4,!1 = @sid_1]
+timestamp_2 = timestamp_1[payload_3 = payload_4,!1 = @sid_1]
+goal reachable: b-event(sensor_measure(device_1[],topic_1[],payload_4)) -> event(gateway_accept(device_1[],topic_1[],payload_4,sequence_2,timestamp_2))
+Abbreviations:
+payload_4 = payload[!1 = @sid]
+sequence_2 = sequence[payload_2 = payload_4,!1 = @sid_1]
+timestamp_2 = timestamp[payload_2 = payload_4,!1 = @sid_1]
+RESULT event(gateway_accept(d,t,p,s,ts)) ==> event(sensor_measure(d,t,p)) is true.
+-- Query not event(gateway_second_accept(d,t,p,s,ts,d,t,s)) in process 1.
+Translating the process into Horn clauses...
+Completing...
+Starting query not event(gateway_second_accept(d,t,p,s,ts,d,t,s))
+RESULT not event(gateway_second_accept(d,t,p,s,ts,d,t,s)) is true.
+-- Query event(replay_rejected(d,t,p,s,ts,d,t,s)) ==> event(gateway_first_accept(d,t,p,s,ts)) in process 1.
+Translating the process into Horn clauses...
+Completing...
+Starting query event(replay_rejected(d,t,p,s,ts,d,t,s)) ==> event(gateway_first_accept(d,t,p,s,ts))
+goal reachable: b-event(gateway_first_accept(device_2[],topic_2[],payload_4,sequence_2,timestamp_2)) -> event(replay_rejected(device_2[],topic_2[],payload_4,sequence_2,timestamp_2,device_2[],topic_2[],sequence_2))
+Abbreviations:
+payload_4 = payload_1[!1 = @sid]
+sequence_2 = sequence_1[payload_3 = payload_4,!1 = @sid_1]
+timestamp_2 = timestamp_1[payload_3 = payload_4,!1 = @sid_1]
+goal reachable: b-event(gateway_first_accept(device_1[],topic_1[],payload_4,sequence_2,timestamp_2)) -> event(replay_rejected(device_1[],topic_1[],payload_4,sequence_2,timestamp_2,device_1[],topic_1[],sequence_2))
+Abbreviations:
+payload_4 = payload[!1 = @sid]
+sequence_2 = sequence[payload_2 = payload_4,!1 = @sid_1]
+timestamp_2 = timestamp[payload_2 = payload_4,!1 = @sid_1]
+RESULT event(replay_rejected(d,t,p,s,ts,d,t,s)) ==> event(gateway_first_accept(d,t,p,s,ts)) is true.
+-- Query not event(gateway_first_accept(device_1[],topic_1[],p,s,ts)) in process 1.
+Translating the process into Horn clauses...
+Completing...
+Starting query not event(gateway_first_accept(device_1[],topic_1[],p,s,ts))
+goal reachable: event(gateway_first_accept(device_1[],topic_1[],payload_4,sequence_2,timestamp_2))
+Abbreviations:
+payload_4 = payload[!1 = @sid]
+sequence_2 = sequence[payload_2 = payload_4,!1 = @sid_1]
+timestamp_2 = timestamp[payload_2 = payload_4,!1 = @sid_1]
 
 Derivation:
 Abbreviations:
-payload_5 = payload_1[!1 = @sid]
-sequence_3 = sequence_1[payload_3 = payload_5,!1 = @sid_1]
-timestamp_3 = timestamp_1[payload_3 = payload_5,!1 = @sid_1]
-@occ91_1 = @occ91[received_tag_a = hmac(k_2[],protected_body(device_2[],topic_2[],timestamp_3,sequence_3,digest(payload_5))),received_digest_a = digest(payload_5),payload_a = payload_5,sequence_a = sequence_3,timestamp_a = timestamp_3,topic_a = topic_2[],claimed_device_a = device_2[]]
-payload_6 = payload_1[!1 = @sid_2]
-timestamp_4 = timestamp_1[payload_3 = payload_6,!1 = @sid_3]
-sequence_4 = sequence_1[payload_3 = payload_6,!1 = @sid_3]
-@occ122_1 = @occ122[received_tag_b_1 = hmac(k_2[],protected_body(device_2[],topic_2[],timestamp_3,sequence_3,digest(payload_5))),received_digest_b_1 = digest(payload_5),payload_b_1 = payload_5,sequence_b_1 = sequence_3,timestamp_b_1 = timestamp_3,topic_b_1 = topic_2[],claimed_device_b_1 = device_2[],received_tag_a = hmac(k_2[],protected_body(device_2[],topic_2[],timestamp_4,sequence_4,digest(payload_6))),received_digest_a = digest(payload_6),payload_a = payload_6,sequence_a = sequence_4,timestamp_a = timestamp_4,topic_a = topic_2[],claimed_device_a = device_2[]]
-@occ25_1 = @occ25[payload_3 = payload_5,!1 = @sid_1]
-@occ25_2 = @occ25[payload_3 = payload_6,!1 = @sid_3]
+payload_4 = payload[!1 = @sid]
+sequence_2 = sequence[payload_2 = payload_4,!1 = @sid_1]
+timestamp_2 = timestamp[payload_2 = payload_4,!1 = @sid_1]
+timestamp_3 = timestamp[payload_2 = payload_4,!1 = @sid_2]
+sequence_3 = sequence[payload_2 = payload_4,!1 = @sid_2]
 
-1. The message payload_6 may be sent on channel sensor_ch_2[] at output {8}.
-mess(sensor_ch_2[],payload_6).
+1. The message payload_4 may be sent on channel sensor_ch_1[] at output {4}.
+mess(sensor_ch_1[],payload_4).
 
-2. The message payload_6 that may be sent on channel sensor_ch_2[] by 1 may be received at input {19}.
-The event secure_publish(device_2[],topic_2[],payload_6,sequence_4,timestamp_4) (with occurrence name @occ25_2) may be executed at {25}.
-So the message (device_2[],topic_2[],timestamp_4,sequence_4,payload_6,digest(payload_6),hmac(k_2[],protected_body(device_2[],topic_2[],timestamp_4,sequence_4,digest(payload_6)))) may be sent to the attacker at output {26}.
-attacker((device_2[],topic_2[],timestamp_4,sequence_4,payload_6,digest(payload_6),hmac(k_2[],protected_body(device_2[],topic_2[],timestamp_4,sequence_4,digest(payload_6))))).
+2. The message payload_4 that may be sent on channel sensor_ch_1[] by 1 may be received at input {10}.
+So the message (device_1[],topic_1[],timestamp_2,sequence_2,payload_4,digest(payload_4),hmac(k_1[],protected_body(device_1[],topic_1[],timestamp_2,sequence_2,digest(payload_4)))) may be sent to the attacker at output {17}.
+attacker((device_1[],topic_1[],timestamp_2,sequence_2,payload_4,digest(payload_4),hmac(k_1[],protected_body(device_1[],topic_1[],timestamp_2,sequence_2,digest(payload_4))))).
 
-3. By 2, the attacker may know (device_2[],topic_2[],timestamp_4,sequence_4,payload_6,digest(payload_6),hmac(k_2[],protected_body(device_2[],topic_2[],timestamp_4,sequence_4,digest(payload_6)))).
-Using the function 7-proj-7-tuple the attacker may obtain hmac(k_2[],protected_body(device_2[],topic_2[],timestamp_4,sequence_4,digest(payload_6))).
-attacker(hmac(k_2[],protected_body(device_2[],topic_2[],timestamp_4,sequence_4,digest(payload_6)))).
+3. By 2, the attacker may know (device_1[],topic_1[],timestamp_2,sequence_2,payload_4,digest(payload_4),hmac(k_1[],protected_body(device_1[],topic_1[],timestamp_2,sequence_2,digest(payload_4)))).
+Using the function 7-proj-7-tuple the attacker may obtain hmac(k_1[],protected_body(device_1[],topic_1[],timestamp_2,sequence_2,digest(payload_4))).
+attacker(hmac(k_1[],protected_body(device_1[],topic_1[],timestamp_2,sequence_2,digest(payload_4)))).
 
-4. By 2, the attacker may know (device_2[],topic_2[],timestamp_4,sequence_4,payload_6,digest(payload_6),hmac(k_2[],protected_body(device_2[],topic_2[],timestamp_4,sequence_4,digest(payload_6)))).
-Using the function 5-proj-7-tuple the attacker may obtain payload_6.
-attacker(payload_6).
+4. The message payload_4 that may be sent on channel sensor_ch_1[] by 1 may be received at input {10}.
+So the message (device_1[],topic_1[],timestamp_3,sequence_3,payload_4,digest(payload_4),hmac(k_1[],protected_body(device_1[],topic_1[],timestamp_3,sequence_3,digest(payload_4)))) may be sent to the attacker at output {17}.
+attacker((device_1[],topic_1[],timestamp_3,sequence_3,payload_4,digest(payload_4),hmac(k_1[],protected_body(device_1[],topic_1[],timestamp_3,sequence_3,digest(payload_4))))).
 
-5. By 4, the attacker may know payload_6.
-Using the function digest the attacker may obtain digest(payload_6).
-attacker(digest(payload_6)).
+5. By 4, the attacker may know (device_1[],topic_1[],timestamp_3,sequence_3,payload_4,digest(payload_4),hmac(k_1[],protected_body(device_1[],topic_1[],timestamp_3,sequence_3,digest(payload_4)))).
+Using the function 5-proj-7-tuple the attacker may obtain payload_4.
+attacker(payload_4).
 
-6. By 2, the attacker may know (device_2[],topic_2[],timestamp_4,sequence_4,payload_6,digest(payload_6),hmac(k_2[],protected_body(device_2[],topic_2[],timestamp_4,sequence_4,digest(payload_6)))).
-Using the function 4-proj-7-tuple the attacker may obtain sequence_4.
-attacker(sequence_4).
+6. By 5, the attacker may know payload_4.
+Using the function digest the attacker may obtain digest(payload_4).
+attacker(digest(payload_4)).
 
-7. By 2, the attacker may know (device_2[],topic_2[],timestamp_4,sequence_4,payload_6,digest(payload_6),hmac(k_2[],protected_body(device_2[],topic_2[],timestamp_4,sequence_4,digest(payload_6)))).
-Using the function 3-proj-7-tuple the attacker may obtain timestamp_4.
-attacker(timestamp_4).
+7. By 2, the attacker may know (device_1[],topic_1[],timestamp_2,sequence_2,payload_4,digest(payload_4),hmac(k_1[],protected_body(device_1[],topic_1[],timestamp_2,sequence_2,digest(payload_4)))).
+Using the function 4-proj-7-tuple the attacker may obtain sequence_2.
+attacker(sequence_2).
 
-8. The attacker initially knows topic_2[].
-attacker(topic_2[]).
-
-9. The attacker initially knows device_2[].
-attacker(device_2[]).
-
-10. By 9, the attacker may know device_2[].
-By 8, the attacker may know topic_2[].
-By 7, the attacker may know timestamp_4.
-By 6, the attacker may know sequence_4.
-By 4, the attacker may know payload_6.
-By 5, the attacker may know digest(payload_6).
-By 3, the attacker may know hmac(k_2[],protected_body(device_2[],topic_2[],timestamp_4,sequence_4,digest(payload_6))).
-Using the function 7-tuple the attacker may obtain (device_2[],topic_2[],timestamp_4,sequence_4,payload_6,digest(payload_6),hmac(k_2[],protected_body(device_2[],topic_2[],timestamp_4,sequence_4,digest(payload_6)))).
-attacker((device_2[],topic_2[],timestamp_4,sequence_4,payload_6,digest(payload_6),hmac(k_2[],protected_body(device_2[],topic_2[],timestamp_4,sequence_4,digest(payload_6))))).
-
-11. The message payload_5 may be sent on channel sensor_ch_2[] at output {8}.
-mess(sensor_ch_2[],payload_5).
-
-12. The message payload_5 that may be sent on channel sensor_ch_2[] by 11 may be received at input {19}.
-The event secure_publish(device_2[],topic_2[],payload_5,sequence_3,timestamp_3) (with occurrence name @occ25_1) may be executed at {25}.
-So the message (device_2[],topic_2[],timestamp_3,sequence_3,payload_5,digest(payload_5),hmac(k_2[],protected_body(device_2[],topic_2[],timestamp_3,sequence_3,digest(payload_5)))) may be sent to the attacker at output {26}.
-attacker((device_2[],topic_2[],timestamp_3,sequence_3,payload_5,digest(payload_5),hmac(k_2[],protected_body(device_2[],topic_2[],timestamp_3,sequence_3,digest(payload_5))))).
-
-13. By 12, the attacker may know (device_2[],topic_2[],timestamp_3,sequence_3,payload_5,digest(payload_5),hmac(k_2[],protected_body(device_2[],topic_2[],timestamp_3,sequence_3,digest(payload_5)))).
-Using the function 7-proj-7-tuple the attacker may obtain hmac(k_2[],protected_body(device_2[],topic_2[],timestamp_3,sequence_3,digest(payload_5))).
-attacker(hmac(k_2[],protected_body(device_2[],topic_2[],timestamp_3,sequence_3,digest(payload_5)))).
-
-14. By 12, the attacker may know (device_2[],topic_2[],timestamp_3,sequence_3,payload_5,digest(payload_5),hmac(k_2[],protected_body(device_2[],topic_2[],timestamp_3,sequence_3,digest(payload_5)))).
-Using the function 5-proj-7-tuple the attacker may obtain payload_5.
-attacker(payload_5).
-
-15. By 14, the attacker may know payload_5.
-Using the function digest the attacker may obtain digest(payload_5).
-attacker(digest(payload_5)).
-
-16. By 12, the attacker may know (device_2[],topic_2[],timestamp_3,sequence_3,payload_5,digest(payload_5),hmac(k_2[],protected_body(device_2[],topic_2[],timestamp_3,sequence_3,digest(payload_5)))).
-Using the function 4-proj-7-tuple the attacker may obtain sequence_3.
-attacker(sequence_3).
-
-17. By 12, the attacker may know (device_2[],topic_2[],timestamp_3,sequence_3,payload_5,digest(payload_5),hmac(k_2[],protected_body(device_2[],topic_2[],timestamp_3,sequence_3,digest(payload_5)))).
-Using the function 3-proj-7-tuple the attacker may obtain timestamp_3.
-attacker(timestamp_3).
-
-18. By 9, the attacker may know device_2[].
-By 8, the attacker may know topic_2[].
-By 17, the attacker may know timestamp_3.
-By 16, the attacker may know sequence_3.
-By 14, the attacker may know payload_5.
-By 15, the attacker may know digest(payload_5).
-By 13, the attacker may know hmac(k_2[],protected_body(device_2[],topic_2[],timestamp_3,sequence_3,digest(payload_5))).
-Using the function 7-tuple the attacker may obtain (device_2[],topic_2[],timestamp_3,sequence_3,payload_5,digest(payload_5),hmac(k_2[],protected_body(device_2[],topic_2[],timestamp_3,sequence_3,digest(payload_5)))).
-attacker((device_2[],topic_2[],timestamp_3,sequence_3,payload_5,digest(payload_5),hmac(k_2[],protected_body(device_2[],topic_2[],timestamp_3,sequence_3,digest(payload_5))))).
-
-19. The message (device_2[],topic_2[],timestamp_4,sequence_4,payload_6,digest(payload_6),hmac(k_2[],protected_body(device_2[],topic_2[],timestamp_4,sequence_4,digest(payload_6)))) that the attacker may have by 10 may be received at input {36}.
-The message (device_2[],topic_2[],timestamp_3,sequence_3,payload_5,digest(payload_5),hmac(k_2[],protected_body(device_2[],topic_2[],timestamp_3,sequence_3,digest(payload_5)))) that the attacker may have by 18 may be received at input {92}.
-We have sequence_3 ≠ sequence_4.
-So event gateway_accept(device_2[],topic_2[],payload_5,sequence_3,timestamp_3) may be executed at {122}.
-inj-event(gateway_accept(device_2[],topic_2[],payload_5,sequence_3,timestamp_3),@occ122_1).
-
-20. By 19, inj-event(gateway_accept(device_2[],topic_2[],payload_5,sequence_3,timestamp_3),@occ122_1).
-The goal is reached, represented in the following fact:
-inj-event(gateway_accept(device_2[],topic_2[],payload_5,sequence_3,timestamp_3),@occ122_1).
-
-21. The message (device_2[],topic_2[],timestamp_3,sequence_3,payload_5,digest(payload_5),hmac(k_2[],protected_body(device_2[],topic_2[],timestamp_3,sequence_3,digest(payload_5)))) that the attacker may have by 18 may be received at input {36}.
-So event gateway_accept(device_2[],topic_2[],payload_5,sequence_3,timestamp_3) may be executed at {91}.
-inj-event(gateway_accept(device_2[],topic_2[],payload_5,sequence_3,timestamp_3),@occ91_1).
-
-22. By 21, inj-event(gateway_accept(device_2[],topic_2[],payload_5,sequence_3,timestamp_3),@occ91_1).
-The goal is reached, represented in the following fact:
-inj-event(gateway_accept(device_2[],topic_2[],payload_5,sequence_3,timestamp_3),@occ91_1).
-
-23. By 22, inj-event(gateway_accept(device_2[],topic_2[],payload_5,sequence_3,timestamp_3),@occ91_1).
-By 20, inj-event(gateway_accept(device_2[],topic_2[],payload_5,sequence_3,timestamp_3),@occ122_1).
-We have @occ91_1 ≠ @occ122_1.
-The goals for injectivity are reached, combined in the following fact:
-inj-event(gateway_accept(device_2[],topic_2[],payload_5,sequence_3,timestamp_3),@occ91_1) && inj-event(gateway_accept(device_2[],topic_2[],payload_5,sequence_3,timestamp_3),@occ122_1).
-
-
-Unification of attacker((device_2[],topic_2[],timestamp_1[payload_3 = payload_1[!1 = @sid_2],!1 = @sid_3],sequence_1[payload_3 = payload_1[!1 = @sid_2],!1 = @sid_3],payload_1[!1 = @sid_2],digest(payload_1[!1 = @sid_2]),hmac(k_2[],protected_body(device_2[],topic_2[],timestamp_1[payload_3 = payload_1[!1 = @sid_2],!1 = @sid_3],sequence_1[payload_3 = payload_1[!1 = @sid_2],!1 = @sid_3],digest(payload_1[!1 = @sid_2]))))) and attacker((device_2[],topic_2[],timestamp_1[payload_3 = payload_1[!1 = @sid],!1 = @sid_1],sequence_1[payload_3 = payload_1[!1 = @sid],!1 = @sid_1],payload_1[!1 = @sid],digest(payload_1[!1 = @sid]),hmac(k_2[],protected_body(device_2[],topic_2[],timestamp_1[payload_3 = payload_1[!1 = @sid],!1 = @sid_1],sequence_1[payload_3 = payload_1[!1 = @sid],!1 = @sid_1],digest(payload_1[!1 = @sid]))))) failed or made a constraint become false at the input at occurrence {36}
-Try adding a [precise] option on it.
-Trying with the initial derivation tree instead.
-Could not find a trace corresponding to this derivation.
-RESULT inj-event(gateway_accept(d_2,t_2,p_2,s_2,ts_2)) ==> inj-event(secure_publish(d_2,t_2,p_2,s_2,ts_2)) cannot be proved.
-RESULT (but event(gateway_accept(d_2,t_2,p_2,s_2,ts_2)) ==> event(secure_publish(d_2,t_2,p_2,s_2,ts_2)) is true.)
--- Query not event(gateway_accept(d_2,topic_unauthorized[],p_2,s_2,ts_2)) in process 1.
-Translating the process into Horn clauses...
-Completing...
-Starting query not event(gateway_accept(d_2,topic_unauthorized[],p_2,s_2,ts_2))
-RESULT not event(gateway_accept(d_2,topic_unauthorized[],p_2,s_2,ts_2)) is true.
--- Query not event(gateway_accept(device_1[],topic_1[],p_2,s_2,ts_2)) in process 1.
-Translating the process into Horn clauses...
-Completing...
-Starting query not event(gateway_accept(device_1[],topic_1[],p_2,s_2,ts_2))
-goal reachable: event(gateway_accept(device_1[],topic_1[],payload_5,sequence_3,timestamp_3))
-Abbreviations:
-payload_5 = payload[!1 = @sid]
-sequence_3 = sequence[payload_2 = payload_5,!1 = @sid_1]
-timestamp_3 = timestamp[payload_2 = payload_5,!1 = @sid_1]
-
-Derivation:
-Abbreviations:
-payload_5 = payload[!1 = @sid]
-sequence_3 = sequence[payload_2 = payload_5,!1 = @sid_1]
-timestamp_3 = timestamp[payload_2 = payload_5,!1 = @sid_1]
-timestamp_4 = timestamp[payload_2 = payload_5,!1 = @sid_2]
-sequence_4 = sequence[payload_2 = payload_5,!1 = @sid_2]
-
-1. The message payload_5 may be sent on channel sensor_ch_1[] at output {4}.
-mess(sensor_ch_1[],payload_5).
-
-2. The message payload_5 that may be sent on channel sensor_ch_1[] by 1 may be received at input {10}.
-So the message (device_1[],topic_1[],timestamp_3,sequence_3,payload_5,digest(payload_5),hmac(k_1[],protected_body(device_1[],topic_1[],timestamp_3,sequence_3,digest(payload_5)))) may be sent to the attacker at output {17}.
-attacker((device_1[],topic_1[],timestamp_3,sequence_3,payload_5,digest(payload_5),hmac(k_1[],protected_body(device_1[],topic_1[],timestamp_3,sequence_3,digest(payload_5))))).
-
-3. By 2, the attacker may know (device_1[],topic_1[],timestamp_3,sequence_3,payload_5,digest(payload_5),hmac(k_1[],protected_body(device_1[],topic_1[],timestamp_3,sequence_3,digest(payload_5)))).
-Using the function 7-proj-7-tuple the attacker may obtain hmac(k_1[],protected_body(device_1[],topic_1[],timestamp_3,sequence_3,digest(payload_5))).
-attacker(hmac(k_1[],protected_body(device_1[],topic_1[],timestamp_3,sequence_3,digest(payload_5)))).
-
-4. The message payload_5 that may be sent on channel sensor_ch_1[] by 1 may be received at input {10}.
-So the message (device_1[],topic_1[],timestamp_4,sequence_4,payload_5,digest(payload_5),hmac(k_1[],protected_body(device_1[],topic_1[],timestamp_4,sequence_4,digest(payload_5)))) may be sent to the attacker at output {17}.
-attacker((device_1[],topic_1[],timestamp_4,sequence_4,payload_5,digest(payload_5),hmac(k_1[],protected_body(device_1[],topic_1[],timestamp_4,sequence_4,digest(payload_5))))).
-
-5. By 4, the attacker may know (device_1[],topic_1[],timestamp_4,sequence_4,payload_5,digest(payload_5),hmac(k_1[],protected_body(device_1[],topic_1[],timestamp_4,sequence_4,digest(payload_5)))).
-Using the function 5-proj-7-tuple the attacker may obtain payload_5.
-attacker(payload_5).
-
-6. By 5, the attacker may know payload_5.
-Using the function digest the attacker may obtain digest(payload_5).
-attacker(digest(payload_5)).
-
-7. By 2, the attacker may know (device_1[],topic_1[],timestamp_3,sequence_3,payload_5,digest(payload_5),hmac(k_1[],protected_body(device_1[],topic_1[],timestamp_3,sequence_3,digest(payload_5)))).
-Using the function 4-proj-7-tuple the attacker may obtain sequence_3.
-attacker(sequence_3).
-
-8. By 2, the attacker may know (device_1[],topic_1[],timestamp_3,sequence_3,payload_5,digest(payload_5),hmac(k_1[],protected_body(device_1[],topic_1[],timestamp_3,sequence_3,digest(payload_5)))).
-Using the function 3-proj-7-tuple the attacker may obtain timestamp_3.
-attacker(timestamp_3).
+8. By 2, the attacker may know (device_1[],topic_1[],timestamp_2,sequence_2,payload_4,digest(payload_4),hmac(k_1[],protected_body(device_1[],topic_1[],timestamp_2,sequence_2,digest(payload_4)))).
+Using the function 3-proj-7-tuple the attacker may obtain timestamp_2.
+attacker(timestamp_2).
 
 9. The attacker initially knows topic_1[].
 attacker(topic_1[]).
@@ -578,73 +404,95 @@ attacker(device_1[]).
 
 11. By 10, the attacker may know device_1[].
 By 9, the attacker may know topic_1[].
-By 8, the attacker may know timestamp_3.
-By 7, the attacker may know sequence_3.
-By 5, the attacker may know payload_5.
-By 6, the attacker may know digest(payload_5).
-By 3, the attacker may know hmac(k_1[],protected_body(device_1[],topic_1[],timestamp_3,sequence_3,digest(payload_5))).
-Using the function 7-tuple the attacker may obtain (device_1[],topic_1[],timestamp_3,sequence_3,payload_5,digest(payload_5),hmac(k_1[],protected_body(device_1[],topic_1[],timestamp_3,sequence_3,digest(payload_5)))).
-attacker((device_1[],topic_1[],timestamp_3,sequence_3,payload_5,digest(payload_5),hmac(k_1[],protected_body(device_1[],topic_1[],timestamp_3,sequence_3,digest(payload_5))))).
+By 8, the attacker may know timestamp_2.
+By 7, the attacker may know sequence_2.
+By 5, the attacker may know payload_4.
+By 6, the attacker may know digest(payload_4).
+By 3, the attacker may know hmac(k_1[],protected_body(device_1[],topic_1[],timestamp_2,sequence_2,digest(payload_4))).
+Using the function 7-tuple the attacker may obtain (device_1[],topic_1[],timestamp_2,sequence_2,payload_4,digest(payload_4),hmac(k_1[],protected_body(device_1[],topic_1[],timestamp_2,sequence_2,digest(payload_4)))).
+attacker((device_1[],topic_1[],timestamp_2,sequence_2,payload_4,digest(payload_4),hmac(k_1[],protected_body(device_1[],topic_1[],timestamp_2,sequence_2,digest(payload_4))))).
 
-12. The message (device_1[],topic_1[],timestamp_3,sequence_3,payload_5,digest(payload_5),hmac(k_1[],protected_body(device_1[],topic_1[],timestamp_3,sequence_3,digest(payload_5)))) that the attacker may have by 11 may be received at input {36}.
-So event gateway_accept(device_1[],topic_1[],payload_5,sequence_3,timestamp_3) may be executed at {44}.
-event(gateway_accept(device_1[],topic_1[],payload_5,sequence_3,timestamp_3)).
+12. The message (device_1[],topic_1[],timestamp_2,sequence_2,payload_4,digest(payload_4),hmac(k_1[],protected_body(device_1[],topic_1[],timestamp_2,sequence_2,digest(payload_4)))) that the attacker may have by 11 may be received at input {27}.
+So event gateway_first_accept(device_1[],topic_1[],payload_4,sequence_2,timestamp_2) may be executed at {32}.
+event(gateway_first_accept(device_1[],topic_1[],payload_4,sequence_2,timestamp_2)).
 
-13. By 12, event(gateway_accept(device_1[],topic_1[],payload_5,sequence_3,timestamp_3)).
+13. By 12, event(gateway_first_accept(device_1[],topic_1[],payload_4,sequence_2,timestamp_2)).
 The goal is reached, represented in the following fact:
-event(gateway_accept(device_1[],topic_1[],payload_5,sequence_3,timestamp_3)).
+event(gateway_first_accept(device_1[],topic_1[],payload_4,sequence_2,timestamp_2)).
 
 
-Could not find a trace corresponding to this derivation.
-RESULT not event(gateway_accept(device_1[],topic_1[],p_2,s_2,ts_2)) cannot be proved.
--- Query not event(gateway_accept(device_2[],topic_2[],p_2,s_2,ts_2)) in process 1.
+A more detailed output of the traces is available with
+  set traceDisplay = long.
+
+new payload: bitstring creating payload_5 at {2} in copy a
+
+event sensor_measure(device_1,topic_1,payload_5) at {3} in copy a
+
+out(sensor_ch_1, payload_5) at {4} in copy a received at {10} in copy a_1
+
+new timestamp: bitstring creating timestamp_4 at {11} in copy a_1
+
+new sequence: bitstring creating sequence_4 at {12} in copy a_1
+
+event secure_publish(device_1,topic_1,payload_5,sequence_4,timestamp_4) at {16} in copy a_1
+
+out(mqtt, (~M,~M_1,~M_2,~M_3,~M_4,~M_5,~M_6)) with ~M = device_1, ~M_1 = topic_1, ~M_2 = timestamp_4, ~M_3 = sequence_4, ~M_4 = payload_5, ~M_5 = digest(payload_5), ~M_6 = hmac(k_1,protected_body(device_1,topic_1,timestamp_4,sequence_4,digest(payload_5))) at {17} in copy a_1
+
+in(mqtt, (device_1,topic_1,~M_2,~M_3,~M_4,digest(~M_4),~M_6)) with ~M_2 = timestamp_4, ~M_3 = sequence_4, ~M_4 = payload_5, digest(~M_4) = digest(payload_5), ~M_6 = hmac(k_1,protected_body(device_1,topic_1,timestamp_4,sequence_4,digest(payload_5))) at {27}
+
+event gateway_first_accept(device_1,topic_1,payload_5,sequence_4,timestamp_4) at {32} (goal)
+
+The event gateway_first_accept(device_1,topic_1,payload_5,sequence_4,timestamp_4) is executed at {32}.
+A trace has been found.
+RESULT not event(gateway_first_accept(device_1[],topic_1[],p,s,ts)) is false.
+-- Query not event(gateway_first_accept(device_2[],topic_2[],p,s,ts)) in process 1.
 Translating the process into Horn clauses...
 Completing...
-Starting query not event(gateway_accept(device_2[],topic_2[],p_2,s_2,ts_2))
-goal reachable: event(gateway_accept(device_2[],topic_2[],payload_5,sequence_3,timestamp_3))
+Starting query not event(gateway_first_accept(device_2[],topic_2[],p,s,ts))
+goal reachable: event(gateway_first_accept(device_2[],topic_2[],payload_4,sequence_2,timestamp_2))
 Abbreviations:
-payload_5 = payload_1[!1 = @sid]
-sequence_3 = sequence_1[payload_3 = payload_5,!1 = @sid_1]
-timestamp_3 = timestamp_1[payload_3 = payload_5,!1 = @sid_1]
+payload_4 = payload_1[!1 = @sid]
+sequence_2 = sequence_1[payload_3 = payload_4,!1 = @sid_1]
+timestamp_2 = timestamp_1[payload_3 = payload_4,!1 = @sid_1]
 
 Derivation:
 Abbreviations:
-payload_5 = payload_1[!1 = @sid]
-sequence_3 = sequence_1[payload_3 = payload_5,!1 = @sid_1]
-timestamp_3 = timestamp_1[payload_3 = payload_5,!1 = @sid_1]
-timestamp_4 = timestamp_1[payload_3 = payload_5,!1 = @sid_2]
-sequence_4 = sequence_1[payload_3 = payload_5,!1 = @sid_2]
+payload_4 = payload_1[!1 = @sid]
+sequence_2 = sequence_1[payload_3 = payload_4,!1 = @sid_1]
+timestamp_2 = timestamp_1[payload_3 = payload_4,!1 = @sid_1]
+timestamp_3 = timestamp_1[payload_3 = payload_4,!1 = @sid_2]
+sequence_3 = sequence_1[payload_3 = payload_4,!1 = @sid_2]
 
-1. The message payload_5 may be sent on channel sensor_ch_2[] at output {8}.
-mess(sensor_ch_2[],payload_5).
+1. The message payload_4 may be sent on channel sensor_ch_2[] at output {8}.
+mess(sensor_ch_2[],payload_4).
 
-2. The message payload_5 that may be sent on channel sensor_ch_2[] by 1 may be received at input {19}.
-So the message (device_2[],topic_2[],timestamp_3,sequence_3,payload_5,digest(payload_5),hmac(k_2[],protected_body(device_2[],topic_2[],timestamp_3,sequence_3,digest(payload_5)))) may be sent to the attacker at output {26}.
-attacker((device_2[],topic_2[],timestamp_3,sequence_3,payload_5,digest(payload_5),hmac(k_2[],protected_body(device_2[],topic_2[],timestamp_3,sequence_3,digest(payload_5))))).
+2. The message payload_4 that may be sent on channel sensor_ch_2[] by 1 may be received at input {19}.
+So the message (device_2[],topic_2[],timestamp_2,sequence_2,payload_4,digest(payload_4),hmac(k_2[],protected_body(device_2[],topic_2[],timestamp_2,sequence_2,digest(payload_4)))) may be sent to the attacker at output {26}.
+attacker((device_2[],topic_2[],timestamp_2,sequence_2,payload_4,digest(payload_4),hmac(k_2[],protected_body(device_2[],topic_2[],timestamp_2,sequence_2,digest(payload_4))))).
 
-3. By 2, the attacker may know (device_2[],topic_2[],timestamp_3,sequence_3,payload_5,digest(payload_5),hmac(k_2[],protected_body(device_2[],topic_2[],timestamp_3,sequence_3,digest(payload_5)))).
-Using the function 7-proj-7-tuple the attacker may obtain hmac(k_2[],protected_body(device_2[],topic_2[],timestamp_3,sequence_3,digest(payload_5))).
-attacker(hmac(k_2[],protected_body(device_2[],topic_2[],timestamp_3,sequence_3,digest(payload_5)))).
+3. By 2, the attacker may know (device_2[],topic_2[],timestamp_2,sequence_2,payload_4,digest(payload_4),hmac(k_2[],protected_body(device_2[],topic_2[],timestamp_2,sequence_2,digest(payload_4)))).
+Using the function 7-proj-7-tuple the attacker may obtain hmac(k_2[],protected_body(device_2[],topic_2[],timestamp_2,sequence_2,digest(payload_4))).
+attacker(hmac(k_2[],protected_body(device_2[],topic_2[],timestamp_2,sequence_2,digest(payload_4)))).
 
-4. The message payload_5 that may be sent on channel sensor_ch_2[] by 1 may be received at input {19}.
-So the message (device_2[],topic_2[],timestamp_4,sequence_4,payload_5,digest(payload_5),hmac(k_2[],protected_body(device_2[],topic_2[],timestamp_4,sequence_4,digest(payload_5)))) may be sent to the attacker at output {26}.
-attacker((device_2[],topic_2[],timestamp_4,sequence_4,payload_5,digest(payload_5),hmac(k_2[],protected_body(device_2[],topic_2[],timestamp_4,sequence_4,digest(payload_5))))).
+4. The message payload_4 that may be sent on channel sensor_ch_2[] by 1 may be received at input {19}.
+So the message (device_2[],topic_2[],timestamp_3,sequence_3,payload_4,digest(payload_4),hmac(k_2[],protected_body(device_2[],topic_2[],timestamp_3,sequence_3,digest(payload_4)))) may be sent to the attacker at output {26}.
+attacker((device_2[],topic_2[],timestamp_3,sequence_3,payload_4,digest(payload_4),hmac(k_2[],protected_body(device_2[],topic_2[],timestamp_3,sequence_3,digest(payload_4))))).
 
-5. By 4, the attacker may know (device_2[],topic_2[],timestamp_4,sequence_4,payload_5,digest(payload_5),hmac(k_2[],protected_body(device_2[],topic_2[],timestamp_4,sequence_4,digest(payload_5)))).
-Using the function 5-proj-7-tuple the attacker may obtain payload_5.
-attacker(payload_5).
+5. By 4, the attacker may know (device_2[],topic_2[],timestamp_3,sequence_3,payload_4,digest(payload_4),hmac(k_2[],protected_body(device_2[],topic_2[],timestamp_3,sequence_3,digest(payload_4)))).
+Using the function 5-proj-7-tuple the attacker may obtain payload_4.
+attacker(payload_4).
 
-6. By 5, the attacker may know payload_5.
-Using the function digest the attacker may obtain digest(payload_5).
-attacker(digest(payload_5)).
+6. By 5, the attacker may know payload_4.
+Using the function digest the attacker may obtain digest(payload_4).
+attacker(digest(payload_4)).
 
-7. By 2, the attacker may know (device_2[],topic_2[],timestamp_3,sequence_3,payload_5,digest(payload_5),hmac(k_2[],protected_body(device_2[],topic_2[],timestamp_3,sequence_3,digest(payload_5)))).
-Using the function 4-proj-7-tuple the attacker may obtain sequence_3.
-attacker(sequence_3).
+7. By 2, the attacker may know (device_2[],topic_2[],timestamp_2,sequence_2,payload_4,digest(payload_4),hmac(k_2[],protected_body(device_2[],topic_2[],timestamp_2,sequence_2,digest(payload_4)))).
+Using the function 4-proj-7-tuple the attacker may obtain sequence_2.
+attacker(sequence_2).
 
-8. By 2, the attacker may know (device_2[],topic_2[],timestamp_3,sequence_3,payload_5,digest(payload_5),hmac(k_2[],protected_body(device_2[],topic_2[],timestamp_3,sequence_3,digest(payload_5)))).
-Using the function 3-proj-7-tuple the attacker may obtain timestamp_3.
-attacker(timestamp_3).
+8. By 2, the attacker may know (device_2[],topic_2[],timestamp_2,sequence_2,payload_4,digest(payload_4),hmac(k_2[],protected_body(device_2[],topic_2[],timestamp_2,sequence_2,digest(payload_4)))).
+Using the function 3-proj-7-tuple the attacker may obtain timestamp_2.
+attacker(timestamp_2).
 
 9. The attacker initially knows topic_2[].
 attacker(topic_2[]).
@@ -654,70 +502,425 @@ attacker(device_2[]).
 
 11. By 10, the attacker may know device_2[].
 By 9, the attacker may know topic_2[].
-By 8, the attacker may know timestamp_3.
+By 8, the attacker may know timestamp_2.
+By 7, the attacker may know sequence_2.
+By 5, the attacker may know payload_4.
+By 6, the attacker may know digest(payload_4).
+By 3, the attacker may know hmac(k_2[],protected_body(device_2[],topic_2[],timestamp_2,sequence_2,digest(payload_4))).
+Using the function 7-tuple the attacker may obtain (device_2[],topic_2[],timestamp_2,sequence_2,payload_4,digest(payload_4),hmac(k_2[],protected_body(device_2[],topic_2[],timestamp_2,sequence_2,digest(payload_4)))).
+attacker((device_2[],topic_2[],timestamp_2,sequence_2,payload_4,digest(payload_4),hmac(k_2[],protected_body(device_2[],topic_2[],timestamp_2,sequence_2,digest(payload_4))))).
+
+12. The message (device_2[],topic_2[],timestamp_2,sequence_2,payload_4,digest(payload_4),hmac(k_2[],protected_body(device_2[],topic_2[],timestamp_2,sequence_2,digest(payload_4)))) that the attacker may have by 11 may be received at input {27}.
+So event gateway_first_accept(device_2[],topic_2[],payload_4,sequence_2,timestamp_2) may be executed at {67}.
+event(gateway_first_accept(device_2[],topic_2[],payload_4,sequence_2,timestamp_2)).
+
+13. By 12, event(gateway_first_accept(device_2[],topic_2[],payload_4,sequence_2,timestamp_2)).
+The goal is reached, represented in the following fact:
+event(gateway_first_accept(device_2[],topic_2[],payload_4,sequence_2,timestamp_2)).
+
+
+A more detailed output of the traces is available with
+  set traceDisplay = long.
+
+new payload_1: bitstring creating payload_5 at {6} in copy a
+
+event sensor_measure(device_2,topic_2,payload_5) at {7} in copy a
+
+out(sensor_ch_2, payload_5) at {8} in copy a received at {19} in copy a_1
+
+new timestamp_1: bitstring creating timestamp_4 at {20} in copy a_1
+
+new sequence_1: bitstring creating sequence_4 at {21} in copy a_1
+
+event secure_publish(device_2,topic_2,payload_5,sequence_4,timestamp_4) at {25} in copy a_1
+
+out(mqtt, (~M,~M_1,~M_2,~M_3,~M_4,~M_5,~M_6)) with ~M = device_2, ~M_1 = topic_2, ~M_2 = timestamp_4, ~M_3 = sequence_4, ~M_4 = payload_5, ~M_5 = digest(payload_5), ~M_6 = hmac(k_2,protected_body(device_2,topic_2,timestamp_4,sequence_4,digest(payload_5))) at {26} in copy a_1
+
+in(mqtt, (device_2,topic_2,~M_2,~M_3,~M_4,digest(~M_4),~M_6)) with ~M_2 = timestamp_4, ~M_3 = sequence_4, ~M_4 = payload_5, digest(~M_4) = digest(payload_5), ~M_6 = hmac(k_2,protected_body(device_2,topic_2,timestamp_4,sequence_4,digest(payload_5))) at {27}
+
+event gateway_first_accept(device_2,topic_2,payload_5,sequence_4,timestamp_4) at {67} (goal)
+
+The event gateway_first_accept(device_2,topic_2,payload_5,sequence_4,timestamp_4) is executed at {67}.
+A trace has been found.
+RESULT not event(gateway_first_accept(device_2[],topic_2[],p,s,ts)) is false.
+-- Query not event(replay_rejected(device_1[],topic_1[],p,s,ts,device_1[],topic_1[],s)) in process 1.
+Translating the process into Horn clauses...
+Completing...
+Starting query not event(replay_rejected(device_1[],topic_1[],p,s,ts,device_1[],topic_1[],s))
+goal reachable: event(replay_rejected(device_1[],topic_1[],payload_4,sequence_2,timestamp_2,device_1[],topic_1[],sequence_2))
+Abbreviations:
+payload_4 = payload[!1 = @sid]
+sequence_2 = sequence[payload_2 = payload_4,!1 = @sid_1]
+timestamp_2 = timestamp[payload_2 = payload_4,!1 = @sid_1]
+
+Derivation:
+Abbreviations:
+payload_4 = payload[!1 = @sid]
+sequence_2 = sequence[payload_2 = payload_4,!1 = @sid_1]
+timestamp_2 = timestamp[payload_2 = payload_4,!1 = @sid_1]
+timestamp_3 = timestamp[payload_2 = payload_4,!1 = @sid_2]
+sequence_3 = sequence[payload_2 = payload_4,!1 = @sid_2]
+
+1. The message payload_4 may be sent on channel sensor_ch_1[] at output {4}.
+mess(sensor_ch_1[],payload_4).
+
+2. The message payload_4 that may be sent on channel sensor_ch_1[] by 1 may be received at input {10}.
+So the message (device_1[],topic_1[],timestamp_2,sequence_2,payload_4,digest(payload_4),hmac(k_1[],protected_body(device_1[],topic_1[],timestamp_2,sequence_2,digest(payload_4)))) may be sent to the attacker at output {17}.
+attacker((device_1[],topic_1[],timestamp_2,sequence_2,payload_4,digest(payload_4),hmac(k_1[],protected_body(device_1[],topic_1[],timestamp_2,sequence_2,digest(payload_4))))).
+
+3. By 2, the attacker may know (device_1[],topic_1[],timestamp_2,sequence_2,payload_4,digest(payload_4),hmac(k_1[],protected_body(device_1[],topic_1[],timestamp_2,sequence_2,digest(payload_4)))).
+Using the function 7-proj-7-tuple the attacker may obtain hmac(k_1[],protected_body(device_1[],topic_1[],timestamp_2,sequence_2,digest(payload_4))).
+attacker(hmac(k_1[],protected_body(device_1[],topic_1[],timestamp_2,sequence_2,digest(payload_4)))).
+
+4. The message payload_4 that may be sent on channel sensor_ch_1[] by 1 may be received at input {10}.
+So the message (device_1[],topic_1[],timestamp_3,sequence_3,payload_4,digest(payload_4),hmac(k_1[],protected_body(device_1[],topic_1[],timestamp_3,sequence_3,digest(payload_4)))) may be sent to the attacker at output {17}.
+attacker((device_1[],topic_1[],timestamp_3,sequence_3,payload_4,digest(payload_4),hmac(k_1[],protected_body(device_1[],topic_1[],timestamp_3,sequence_3,digest(payload_4))))).
+
+5. By 4, the attacker may know (device_1[],topic_1[],timestamp_3,sequence_3,payload_4,digest(payload_4),hmac(k_1[],protected_body(device_1[],topic_1[],timestamp_3,sequence_3,digest(payload_4)))).
+Using the function 5-proj-7-tuple the attacker may obtain payload_4.
+attacker(payload_4).
+
+6. By 5, the attacker may know payload_4.
+Using the function digest the attacker may obtain digest(payload_4).
+attacker(digest(payload_4)).
+
+7. By 2, the attacker may know (device_1[],topic_1[],timestamp_2,sequence_2,payload_4,digest(payload_4),hmac(k_1[],protected_body(device_1[],topic_1[],timestamp_2,sequence_2,digest(payload_4)))).
+Using the function 4-proj-7-tuple the attacker may obtain sequence_2.
+attacker(sequence_2).
+
+8. By 2, the attacker may know (device_1[],topic_1[],timestamp_2,sequence_2,payload_4,digest(payload_4),hmac(k_1[],protected_body(device_1[],topic_1[],timestamp_2,sequence_2,digest(payload_4)))).
+Using the function 3-proj-7-tuple the attacker may obtain timestamp_2.
+attacker(timestamp_2).
+
+9. The attacker initially knows topic_1[].
+attacker(topic_1[]).
+
+10. The attacker initially knows device_1[].
+attacker(device_1[]).
+
+11. By 10, the attacker may know device_1[].
+By 9, the attacker may know topic_1[].
+By 8, the attacker may know timestamp_2.
+By 7, the attacker may know sequence_2.
+By 5, the attacker may know payload_4.
+By 6, the attacker may know digest(payload_4).
+By 3, the attacker may know hmac(k_1[],protected_body(device_1[],topic_1[],timestamp_2,sequence_2,digest(payload_4))).
+Using the function 7-tuple the attacker may obtain (device_1[],topic_1[],timestamp_2,sequence_2,payload_4,digest(payload_4),hmac(k_1[],protected_body(device_1[],topic_1[],timestamp_2,sequence_2,digest(payload_4)))).
+attacker((device_1[],topic_1[],timestamp_2,sequence_2,payload_4,digest(payload_4),hmac(k_1[],protected_body(device_1[],topic_1[],timestamp_2,sequence_2,digest(payload_4))))).
+
+12. The message (device_1[],topic_1[],timestamp_2,sequence_2,payload_4,digest(payload_4),hmac(k_1[],protected_body(device_1[],topic_1[],timestamp_2,sequence_2,digest(payload_4)))) that the attacker may have by 11 may be received at input {27}.
+The message (device_1[],topic_1[],timestamp_2,sequence_2,payload_4,digest(payload_4),hmac(k_1[],protected_body(device_1[],topic_1[],timestamp_2,sequence_2,digest(payload_4)))) that the attacker may have by 11 may be received at input {34}.
+So event replay_rejected(device_1[],topic_1[],payload_4,sequence_2,timestamp_2,device_1[],topic_1[],sequence_2) may be executed at {42}.
+event(replay_rejected(device_1[],topic_1[],payload_4,sequence_2,timestamp_2,device_1[],topic_1[],sequence_2)).
+
+13. By 12, event(replay_rejected(device_1[],topic_1[],payload_4,sequence_2,timestamp_2,device_1[],topic_1[],sequence_2)).
+The goal is reached, represented in the following fact:
+event(replay_rejected(device_1[],topic_1[],payload_4,sequence_2,timestamp_2,device_1[],topic_1[],sequence_2)).
+
+
+A more detailed output of the traces is available with
+  set traceDisplay = long.
+
+new payload: bitstring creating payload_5 at {2} in copy a
+
+event sensor_measure(device_1,topic_1,payload_5) at {3} in copy a
+
+out(sensor_ch_1, payload_5) at {4} in copy a received at {10} in copy a_1
+
+new timestamp: bitstring creating timestamp_4 at {11} in copy a_1
+
+new sequence: bitstring creating sequence_4 at {12} in copy a_1
+
+event secure_publish(device_1,topic_1,payload_5,sequence_4,timestamp_4) at {16} in copy a_1
+
+out(mqtt, (~M,~M_1,~M_2,~M_3,~M_4,~M_5,~M_6)) with ~M = device_1, ~M_1 = topic_1, ~M_2 = timestamp_4, ~M_3 = sequence_4, ~M_4 = payload_5, ~M_5 = digest(payload_5), ~M_6 = hmac(k_1,protected_body(device_1,topic_1,timestamp_4,sequence_4,digest(payload_5))) at {17} in copy a_1
+
+in(mqtt, (device_1,topic_1,~M_2,~M_3,~M_4,digest(~M_4),~M_6)) with ~M_2 = timestamp_4, ~M_3 = sequence_4, ~M_4 = payload_5, digest(~M_4) = digest(payload_5), ~M_6 = hmac(k_1,protected_body(device_1,topic_1,timestamp_4,sequence_4,digest(payload_5))) at {27}
+
+event gateway_first_accept(device_1,topic_1,payload_5,sequence_4,timestamp_4) at {32}
+
+event gateway_accept(device_1,topic_1,payload_5,sequence_4,timestamp_4) at {33}
+
+in(mqtt, (device_1,topic_1,~M_2,~M_3,~M_4,digest(~M_4),~M_6)) with ~M_2 = timestamp_4, ~M_3 = sequence_4, ~M_4 = payload_5, digest(~M_4) = digest(payload_5), ~M_6 = hmac(k_1,protected_body(device_1,topic_1,timestamp_4,sequence_4,digest(payload_5))) at {34}
+
+event replay_rejected(device_1,topic_1,payload_5,sequence_4,timestamp_4,device_1,topic_1,sequence_4) at {42} (goal)
+
+The event replay_rejected(device_1,topic_1,payload_5,sequence_4,timestamp_4,device_1,topic_1,sequence_4) is executed at {42}.
+A trace has been found.
+RESULT not event(replay_rejected(device_1[],topic_1[],p,s,ts,device_1[],topic_1[],s)) is false.
+-- Query not event(replay_rejected(device_2[],topic_2[],p,s,ts,device_2[],topic_2[],s)) in process 1.
+Translating the process into Horn clauses...
+Completing...
+Starting query not event(replay_rejected(device_2[],topic_2[],p,s,ts,device_2[],topic_2[],s))
+goal reachable: event(replay_rejected(device_2[],topic_2[],payload_4,sequence_2,timestamp_2,device_2[],topic_2[],sequence_2))
+Abbreviations:
+payload_4 = payload_1[!1 = @sid]
+sequence_2 = sequence_1[payload_3 = payload_4,!1 = @sid_1]
+timestamp_2 = timestamp_1[payload_3 = payload_4,!1 = @sid_1]
+
+Derivation:
+Abbreviations:
+payload_4 = payload_1[!1 = @sid]
+sequence_2 = sequence_1[payload_3 = payload_4,!1 = @sid_1]
+timestamp_2 = timestamp_1[payload_3 = payload_4,!1 = @sid_1]
+timestamp_3 = timestamp_1[payload_3 = payload_4,!1 = @sid_2]
+sequence_3 = sequence_1[payload_3 = payload_4,!1 = @sid_2]
+
+1. The message payload_4 may be sent on channel sensor_ch_2[] at output {8}.
+mess(sensor_ch_2[],payload_4).
+
+2. The message payload_4 that may be sent on channel sensor_ch_2[] by 1 may be received at input {19}.
+So the message (device_2[],topic_2[],timestamp_2,sequence_2,payload_4,digest(payload_4),hmac(k_2[],protected_body(device_2[],topic_2[],timestamp_2,sequence_2,digest(payload_4)))) may be sent to the attacker at output {26}.
+attacker((device_2[],topic_2[],timestamp_2,sequence_2,payload_4,digest(payload_4),hmac(k_2[],protected_body(device_2[],topic_2[],timestamp_2,sequence_2,digest(payload_4))))).
+
+3. By 2, the attacker may know (device_2[],topic_2[],timestamp_2,sequence_2,payload_4,digest(payload_4),hmac(k_2[],protected_body(device_2[],topic_2[],timestamp_2,sequence_2,digest(payload_4)))).
+Using the function 7-proj-7-tuple the attacker may obtain hmac(k_2[],protected_body(device_2[],topic_2[],timestamp_2,sequence_2,digest(payload_4))).
+attacker(hmac(k_2[],protected_body(device_2[],topic_2[],timestamp_2,sequence_2,digest(payload_4)))).
+
+4. The message payload_4 that may be sent on channel sensor_ch_2[] by 1 may be received at input {19}.
+So the message (device_2[],topic_2[],timestamp_3,sequence_3,payload_4,digest(payload_4),hmac(k_2[],protected_body(device_2[],topic_2[],timestamp_3,sequence_3,digest(payload_4)))) may be sent to the attacker at output {26}.
+attacker((device_2[],topic_2[],timestamp_3,sequence_3,payload_4,digest(payload_4),hmac(k_2[],protected_body(device_2[],topic_2[],timestamp_3,sequence_3,digest(payload_4))))).
+
+5. By 4, the attacker may know (device_2[],topic_2[],timestamp_3,sequence_3,payload_4,digest(payload_4),hmac(k_2[],protected_body(device_2[],topic_2[],timestamp_3,sequence_3,digest(payload_4)))).
+Using the function 5-proj-7-tuple the attacker may obtain payload_4.
+attacker(payload_4).
+
+6. By 5, the attacker may know payload_4.
+Using the function digest the attacker may obtain digest(payload_4).
+attacker(digest(payload_4)).
+
+7. By 2, the attacker may know (device_2[],topic_2[],timestamp_2,sequence_2,payload_4,digest(payload_4),hmac(k_2[],protected_body(device_2[],topic_2[],timestamp_2,sequence_2,digest(payload_4)))).
+Using the function 4-proj-7-tuple the attacker may obtain sequence_2.
+attacker(sequence_2).
+
+8. By 2, the attacker may know (device_2[],topic_2[],timestamp_2,sequence_2,payload_4,digest(payload_4),hmac(k_2[],protected_body(device_2[],topic_2[],timestamp_2,sequence_2,digest(payload_4)))).
+Using the function 3-proj-7-tuple the attacker may obtain timestamp_2.
+attacker(timestamp_2).
+
+9. The attacker initially knows topic_2[].
+attacker(topic_2[]).
+
+10. The attacker initially knows device_2[].
+attacker(device_2[]).
+
+11. By 10, the attacker may know device_2[].
+By 9, the attacker may know topic_2[].
+By 8, the attacker may know timestamp_2.
+By 7, the attacker may know sequence_2.
+By 5, the attacker may know payload_4.
+By 6, the attacker may know digest(payload_4).
+By 3, the attacker may know hmac(k_2[],protected_body(device_2[],topic_2[],timestamp_2,sequence_2,digest(payload_4))).
+Using the function 7-tuple the attacker may obtain (device_2[],topic_2[],timestamp_2,sequence_2,payload_4,digest(payload_4),hmac(k_2[],protected_body(device_2[],topic_2[],timestamp_2,sequence_2,digest(payload_4)))).
+attacker((device_2[],topic_2[],timestamp_2,sequence_2,payload_4,digest(payload_4),hmac(k_2[],protected_body(device_2[],topic_2[],timestamp_2,sequence_2,digest(payload_4))))).
+
+12. The message (device_2[],topic_2[],timestamp_2,sequence_2,payload_4,digest(payload_4),hmac(k_2[],protected_body(device_2[],topic_2[],timestamp_2,sequence_2,digest(payload_4)))) that the attacker may have by 11 may be received at input {27}.
+The message (device_2[],topic_2[],timestamp_2,sequence_2,payload_4,digest(payload_4),hmac(k_2[],protected_body(device_2[],topic_2[],timestamp_2,sequence_2,digest(payload_4)))) that the attacker may have by 11 may be received at input {69}.
+So event replay_rejected(device_2[],topic_2[],payload_4,sequence_2,timestamp_2,device_2[],topic_2[],sequence_2) may be executed at {91}.
+event(replay_rejected(device_2[],topic_2[],payload_4,sequence_2,timestamp_2,device_2[],topic_2[],sequence_2)).
+
+13. By 12, event(replay_rejected(device_2[],topic_2[],payload_4,sequence_2,timestamp_2,device_2[],topic_2[],sequence_2)).
+The goal is reached, represented in the following fact:
+event(replay_rejected(device_2[],topic_2[],payload_4,sequence_2,timestamp_2,device_2[],topic_2[],sequence_2)).
+
+
+A more detailed output of the traces is available with
+  set traceDisplay = long.
+
+new payload_1: bitstring creating payload_5 at {6} in copy a
+
+event sensor_measure(device_2,topic_2,payload_5) at {7} in copy a
+
+out(sensor_ch_2, payload_5) at {8} in copy a received at {19} in copy a_1
+
+new timestamp_1: bitstring creating timestamp_4 at {20} in copy a_1
+
+new sequence_1: bitstring creating sequence_4 at {21} in copy a_1
+
+event secure_publish(device_2,topic_2,payload_5,sequence_4,timestamp_4) at {25} in copy a_1
+
+out(mqtt, (~M,~M_1,~M_2,~M_3,~M_4,~M_5,~M_6)) with ~M = device_2, ~M_1 = topic_2, ~M_2 = timestamp_4, ~M_3 = sequence_4, ~M_4 = payload_5, ~M_5 = digest(payload_5), ~M_6 = hmac(k_2,protected_body(device_2,topic_2,timestamp_4,sequence_4,digest(payload_5))) at {26} in copy a_1
+
+in(mqtt, (device_2,topic_2,~M_2,~M_3,~M_4,digest(~M_4),~M_6)) with ~M_2 = timestamp_4, ~M_3 = sequence_4, ~M_4 = payload_5, digest(~M_4) = digest(payload_5), ~M_6 = hmac(k_2,protected_body(device_2,topic_2,timestamp_4,sequence_4,digest(payload_5))) at {27}
+
+event gateway_first_accept(device_2,topic_2,payload_5,sequence_4,timestamp_4) at {67}
+
+event gateway_accept(device_2,topic_2,payload_5,sequence_4,timestamp_4) at {68}
+
+in(mqtt, (device_2,topic_2,~M_2,~M_3,~M_4,digest(~M_4),~M_6)) with ~M_2 = timestamp_4, ~M_3 = sequence_4, ~M_4 = payload_5, digest(~M_4) = digest(payload_5), ~M_6 = hmac(k_2,protected_body(device_2,topic_2,timestamp_4,sequence_4,digest(payload_5))) at {69}
+
+event replay_rejected(device_2,topic_2,payload_5,sequence_4,timestamp_4,device_2,topic_2,sequence_4) at {91} (goal)
+
+The event replay_rejected(device_2,topic_2,payload_5,sequence_4,timestamp_4,device_2,topic_2,sequence_4) is executed at {91}.
+A trace has been found.
+RESULT not event(replay_rejected(device_2[],topic_2[],p,s,ts,device_2[],topic_2[],s)) is false.
+-- Query not event(gateway_second_accept(d,t,p,s,ts,seen_d,seen_t,seen_s)) in process 1.
+Translating the process into Horn clauses...
+Completing...
+Starting query not event(gateway_second_accept(d,t,p,s,ts,seen_d,seen_t,seen_s))
+goal reachable: (@sid ≠ @sid_1 | @sid_2 ≠ @sid_3) -> event(gateway_second_accept(device_2[],topic_2[],payload_4,sequence_2,timestamp_2,device_2[],topic_2[],sequence_3))
+Abbreviations:
+payload_4 = payload_1[!1 = @sid_1]
+sequence_2 = sequence_1[payload_3 = payload_4,!1 = @sid_3]
+timestamp_2 = timestamp_1[payload_3 = payload_4,!1 = @sid_3]
+payload_5 = payload_1[!1 = @sid]
+sequence_3 = sequence_1[payload_3 = payload_5,!1 = @sid_2]
+
+Derivation:
+Abbreviations:
+payload_4 = payload_1[!1 = @sid]
+sequence_2 = sequence_1[payload_3 = payload_4,!1 = @sid_1]
+timestamp_2 = timestamp_1[payload_3 = payload_4,!1 = @sid_1]
+payload_5 = payload_1[!1 = @sid_2]
+sequence_3 = sequence_1[payload_3 = payload_5,!1 = @sid_3]
+timestamp_3 = timestamp_1[payload_3 = payload_4,!1 = @sid_4]
+sequence_4 = sequence_1[payload_3 = payload_4,!1 = @sid_4]
+timestamp_4 = timestamp_1[payload_3 = payload_5,!1 = @sid_3]
+timestamp_5 = timestamp_1[payload_3 = payload_5,!1 = @sid_5]
+sequence_5 = sequence_1[payload_3 = payload_5,!1 = @sid_5]
+
+1. The message payload_5 may be sent on channel sensor_ch_2[] at output {8}.
+mess(sensor_ch_2[],payload_5).
+
+2. The message payload_5 that may be sent on channel sensor_ch_2[] by 1 may be received at input {19}.
+So the message (device_2[],topic_2[],timestamp_4,sequence_3,payload_5,digest(payload_5),hmac(k_2[],protected_body(device_2[],topic_2[],timestamp_4,sequence_3,digest(payload_5)))) may be sent to the attacker at output {26}.
+attacker((device_2[],topic_2[],timestamp_4,sequence_3,payload_5,digest(payload_5),hmac(k_2[],protected_body(device_2[],topic_2[],timestamp_4,sequence_3,digest(payload_5))))).
+
+3. By 2, the attacker may know (device_2[],topic_2[],timestamp_4,sequence_3,payload_5,digest(payload_5),hmac(k_2[],protected_body(device_2[],topic_2[],timestamp_4,sequence_3,digest(payload_5)))).
+Using the function 7-proj-7-tuple the attacker may obtain hmac(k_2[],protected_body(device_2[],topic_2[],timestamp_4,sequence_3,digest(payload_5))).
+attacker(hmac(k_2[],protected_body(device_2[],topic_2[],timestamp_4,sequence_3,digest(payload_5)))).
+
+4. The message payload_5 that may be sent on channel sensor_ch_2[] by 1 may be received at input {19}.
+So the message (device_2[],topic_2[],timestamp_5,sequence_5,payload_5,digest(payload_5),hmac(k_2[],protected_body(device_2[],topic_2[],timestamp_5,sequence_5,digest(payload_5)))) may be sent to the attacker at output {26}.
+attacker((device_2[],topic_2[],timestamp_5,sequence_5,payload_5,digest(payload_5),hmac(k_2[],protected_body(device_2[],topic_2[],timestamp_5,sequence_5,digest(payload_5))))).
+
+5. By 4, the attacker may know (device_2[],topic_2[],timestamp_5,sequence_5,payload_5,digest(payload_5),hmac(k_2[],protected_body(device_2[],topic_2[],timestamp_5,sequence_5,digest(payload_5)))).
+Using the function 5-proj-7-tuple the attacker may obtain payload_5.
+attacker(payload_5).
+
+6. By 5, the attacker may know payload_5.
+Using the function digest the attacker may obtain digest(payload_5).
+attacker(digest(payload_5)).
+
+7. By 2, the attacker may know (device_2[],topic_2[],timestamp_4,sequence_3,payload_5,digest(payload_5),hmac(k_2[],protected_body(device_2[],topic_2[],timestamp_4,sequence_3,digest(payload_5)))).
+Using the function 4-proj-7-tuple the attacker may obtain sequence_3.
+attacker(sequence_3).
+
+8. By 2, the attacker may know (device_2[],topic_2[],timestamp_4,sequence_3,payload_5,digest(payload_5),hmac(k_2[],protected_body(device_2[],topic_2[],timestamp_4,sequence_3,digest(payload_5)))).
+Using the function 3-proj-7-tuple the attacker may obtain timestamp_4.
+attacker(timestamp_4).
+
+9. The attacker initially knows topic_2[].
+attacker(topic_2[]).
+
+10. The attacker initially knows device_2[].
+attacker(device_2[]).
+
+11. By 10, the attacker may know device_2[].
+By 9, the attacker may know topic_2[].
+By 8, the attacker may know timestamp_4.
 By 7, the attacker may know sequence_3.
 By 5, the attacker may know payload_5.
 By 6, the attacker may know digest(payload_5).
-By 3, the attacker may know hmac(k_2[],protected_body(device_2[],topic_2[],timestamp_3,sequence_3,digest(payload_5))).
-Using the function 7-tuple the attacker may obtain (device_2[],topic_2[],timestamp_3,sequence_3,payload_5,digest(payload_5),hmac(k_2[],protected_body(device_2[],topic_2[],timestamp_3,sequence_3,digest(payload_5)))).
-attacker((device_2[],topic_2[],timestamp_3,sequence_3,payload_5,digest(payload_5),hmac(k_2[],protected_body(device_2[],topic_2[],timestamp_3,sequence_3,digest(payload_5))))).
+By 3, the attacker may know hmac(k_2[],protected_body(device_2[],topic_2[],timestamp_4,sequence_3,digest(payload_5))).
+Using the function 7-tuple the attacker may obtain (device_2[],topic_2[],timestamp_4,sequence_3,payload_5,digest(payload_5),hmac(k_2[],protected_body(device_2[],topic_2[],timestamp_4,sequence_3,digest(payload_5)))).
+attacker((device_2[],topic_2[],timestamp_4,sequence_3,payload_5,digest(payload_5),hmac(k_2[],protected_body(device_2[],topic_2[],timestamp_4,sequence_3,digest(payload_5))))).
 
-12. The message (device_2[],topic_2[],timestamp_3,sequence_3,payload_5,digest(payload_5),hmac(k_2[],protected_body(device_2[],topic_2[],timestamp_3,sequence_3,digest(payload_5)))) that the attacker may have by 11 may be received at input {36}.
-So event gateway_accept(device_2[],topic_2[],payload_5,sequence_3,timestamp_3) may be executed at {91}.
-event(gateway_accept(device_2[],topic_2[],payload_5,sequence_3,timestamp_3)).
+12. The message payload_4 may be sent on channel sensor_ch_2[] at output {8}.
+mess(sensor_ch_2[],payload_4).
 
-13. By 12, event(gateway_accept(device_2[],topic_2[],payload_5,sequence_3,timestamp_3)).
+13. The message payload_4 that may be sent on channel sensor_ch_2[] by 12 may be received at input {19}.
+So the message (device_2[],topic_2[],timestamp_2,sequence_2,payload_4,digest(payload_4),hmac(k_2[],protected_body(device_2[],topic_2[],timestamp_2,sequence_2,digest(payload_4)))) may be sent to the attacker at output {26}.
+attacker((device_2[],topic_2[],timestamp_2,sequence_2,payload_4,digest(payload_4),hmac(k_2[],protected_body(device_2[],topic_2[],timestamp_2,sequence_2,digest(payload_4))))).
+
+14. By 13, the attacker may know (device_2[],topic_2[],timestamp_2,sequence_2,payload_4,digest(payload_4),hmac(k_2[],protected_body(device_2[],topic_2[],timestamp_2,sequence_2,digest(payload_4)))).
+Using the function 7-proj-7-tuple the attacker may obtain hmac(k_2[],protected_body(device_2[],topic_2[],timestamp_2,sequence_2,digest(payload_4))).
+attacker(hmac(k_2[],protected_body(device_2[],topic_2[],timestamp_2,sequence_2,digest(payload_4)))).
+
+15. The message payload_4 that may be sent on channel sensor_ch_2[] by 12 may be received at input {19}.
+So the message (device_2[],topic_2[],timestamp_3,sequence_4,payload_4,digest(payload_4),hmac(k_2[],protected_body(device_2[],topic_2[],timestamp_3,sequence_4,digest(payload_4)))) may be sent to the attacker at output {26}.
+attacker((device_2[],topic_2[],timestamp_3,sequence_4,payload_4,digest(payload_4),hmac(k_2[],protected_body(device_2[],topic_2[],timestamp_3,sequence_4,digest(payload_4))))).
+
+16. By 15, the attacker may know (device_2[],topic_2[],timestamp_3,sequence_4,payload_4,digest(payload_4),hmac(k_2[],protected_body(device_2[],topic_2[],timestamp_3,sequence_4,digest(payload_4)))).
+Using the function 5-proj-7-tuple the attacker may obtain payload_4.
+attacker(payload_4).
+
+17. By 16, the attacker may know payload_4.
+Using the function digest the attacker may obtain digest(payload_4).
+attacker(digest(payload_4)).
+
+18. By 13, the attacker may know (device_2[],topic_2[],timestamp_2,sequence_2,payload_4,digest(payload_4),hmac(k_2[],protected_body(device_2[],topic_2[],timestamp_2,sequence_2,digest(payload_4)))).
+Using the function 4-proj-7-tuple the attacker may obtain sequence_2.
+attacker(sequence_2).
+
+19. By 13, the attacker may know (device_2[],topic_2[],timestamp_2,sequence_2,payload_4,digest(payload_4),hmac(k_2[],protected_body(device_2[],topic_2[],timestamp_2,sequence_2,digest(payload_4)))).
+Using the function 3-proj-7-tuple the attacker may obtain timestamp_2.
+attacker(timestamp_2).
+
+20. By 10, the attacker may know device_2[].
+By 9, the attacker may know topic_2[].
+By 19, the attacker may know timestamp_2.
+By 18, the attacker may know sequence_2.
+By 16, the attacker may know payload_4.
+By 17, the attacker may know digest(payload_4).
+By 14, the attacker may know hmac(k_2[],protected_body(device_2[],topic_2[],timestamp_2,sequence_2,digest(payload_4))).
+Using the function 7-tuple the attacker may obtain (device_2[],topic_2[],timestamp_2,sequence_2,payload_4,digest(payload_4),hmac(k_2[],protected_body(device_2[],topic_2[],timestamp_2,sequence_2,digest(payload_4)))).
+attacker((device_2[],topic_2[],timestamp_2,sequence_2,payload_4,digest(payload_4),hmac(k_2[],protected_body(device_2[],topic_2[],timestamp_2,sequence_2,digest(payload_4))))).
+
+21. The message (device_2[],topic_2[],timestamp_4,sequence_3,payload_5,digest(payload_5),hmac(k_2[],protected_body(device_2[],topic_2[],timestamp_4,sequence_3,digest(payload_5)))) that the attacker may have by 11 may be received at input {27}.
+The message (device_2[],topic_2[],timestamp_2,sequence_2,payload_4,digest(payload_4),hmac(k_2[],protected_body(device_2[],topic_2[],timestamp_2,sequence_2,digest(payload_4)))) that the attacker may have by 20 may be received at input {69}.
+We have sequence_2 ≠ sequence_3.
+So event gateway_second_accept(device_2[],topic_2[],payload_4,sequence_2,timestamp_2,device_2[],topic_2[],sequence_3) may be executed at {92}.
+event(gateway_second_accept(device_2[],topic_2[],payload_4,sequence_2,timestamp_2,device_2[],topic_2[],sequence_3)).
+
+22. By 21, event(gateway_second_accept(device_2[],topic_2[],payload_4,sequence_2,timestamp_2,device_2[],topic_2[],sequence_3)).
 The goal is reached, represented in the following fact:
-event(gateway_accept(device_2[],topic_2[],payload_5,sequence_3,timestamp_3)).
+event(gateway_second_accept(device_2[],topic_2[],payload_4,sequence_2,timestamp_2,device_2[],topic_2[],sequence_3)).
 
 
-Could not find a trace corresponding to this derivation.
-RESULT not event(gateway_accept(device_2[],topic_2[],p_2,s_2,ts_2)) cannot be proved.
--- Query event(gateway_accept(d_2,t_2,p_2,s_2,ts_2)) ==> event(sensor_measure(d_2,t_2,p_2)) in process 1.
-Translating the process into Horn clauses...
-Completing...
-Starting query event(gateway_accept(d_2,t_2,p_2,s_2,ts_2)) ==> event(sensor_measure(d_2,t_2,p_2))
-goal reachable: b-event(sensor_measure(device_2[],topic_2[],payload_5)) -> event(gateway_accept(device_2[],topic_2[],payload_5,sequence_3,timestamp_3))
-Abbreviations:
-payload_5 = payload_1[!1 = @sid]
-sequence_3 = sequence_1[payload_3 = payload_5,!1 = @sid_1]
-timestamp_3 = timestamp_1[payload_3 = payload_5,!1 = @sid_1]
-goal reachable: b-event(sensor_measure(device_1[],topic_1[],payload_5)) -> event(gateway_accept(device_1[],topic_1[],payload_5,sequence_3,timestamp_3))
-Abbreviations:
-payload_5 = payload[!1 = @sid]
-sequence_3 = sequence[payload_2 = payload_5,!1 = @sid_1]
-timestamp_3 = timestamp[payload_2 = payload_5,!1 = @sid_1]
-RESULT event(gateway_accept(d_2,t_2,p_2,s_2,ts_2)) ==> event(sensor_measure(d_2,t_2,p_2)) is true.
--- Query event(provenance_created(d_2,t_2,p_2,s_2,ts_2)) ==> event(gateway_validated(d_2,t_2,p_2,s_2,ts_2)) in process 1.
-Translating the process into Horn clauses...
-Completing...
-Starting query event(provenance_created(d_2,t_2,p_2,s_2,ts_2)) ==> event(gateway_validated(d_2,t_2,p_2,s_2,ts_2))
-goal reachable: b-event(gateway_validated(device_2[],topic_2[],payload_5,sequence_3,timestamp_3)) -> event(provenance_created(device_2[],topic_2[],payload_5,sequence_3,timestamp_3))
-Abbreviations:
-payload_5 = payload_1[!1 = @sid]
-sequence_3 = sequence_1[payload_3 = payload_5,!1 = @sid_1]
-timestamp_3 = timestamp_1[payload_3 = payload_5,!1 = @sid_1]
-goal reachable: b-event(gateway_validated(device_1[],topic_1[],payload_5,sequence_3,timestamp_3)) -> event(provenance_created(device_1[],topic_1[],payload_5,sequence_3,timestamp_3))
-Abbreviations:
-payload_5 = payload[!1 = @sid]
-sequence_3 = sequence[payload_2 = payload_5,!1 = @sid_1]
-timestamp_3 = timestamp[payload_2 = payload_5,!1 = @sid_1]
-RESULT event(provenance_created(d_2,t_2,p_2,s_2,ts_2)) ==> event(gateway_validated(d_2,t_2,p_2,s_2,ts_2)) is true.
--- Query event(dt_state_applied(d_2,t_2,p_2,s_2,ts_2)) ==> event(gateway_validated(d_2,t_2,p_2,s_2,ts_2)) in process 1.
-Translating the process into Horn clauses...
-Completing...
-Starting query event(dt_state_applied(d_2,t_2,p_2,s_2,ts_2)) ==> event(gateway_validated(d_2,t_2,p_2,s_2,ts_2))
-goal reachable: b-event(gateway_validated(device_2[],topic_2[],payload_5,sequence_3,timestamp_3)) -> event(dt_state_applied(device_2[],topic_2[],payload_5,sequence_3,timestamp_3))
-Abbreviations:
-payload_5 = payload_1[!1 = @sid]
-sequence_3 = sequence_1[payload_3 = payload_5,!1 = @sid_1]
-timestamp_3 = timestamp_1[payload_3 = payload_5,!1 = @sid_1]
-goal reachable: b-event(gateway_validated(device_1[],topic_1[],payload_5,sequence_3,timestamp_3)) -> event(dt_state_applied(device_1[],topic_1[],payload_5,sequence_3,timestamp_3))
-Abbreviations:
-payload_5 = payload[!1 = @sid]
-sequence_3 = sequence[payload_2 = payload_5,!1 = @sid_1]
-timestamp_3 = timestamp[payload_2 = payload_5,!1 = @sid_1]
-RESULT event(dt_state_applied(d_2,t_2,p_2,s_2,ts_2)) ==> event(gateway_validated(d_2,t_2,p_2,s_2,ts_2)) is true.
+A more detailed output of the traces is available with
+  set traceDisplay = long.
+
+new payload_1: bitstring creating payload_6 at {6} in copy a
+
+event sensor_measure(device_2,topic_2,payload_6) at {7} in copy a
+
+new payload_1: bitstring creating payload_7 at {6} in copy a_1
+
+event sensor_measure(device_2,topic_2,payload_7) at {7} in copy a_1
+
+out(sensor_ch_2, payload_7) at {8} in copy a_1 received at {19} in copy a_2
+
+new timestamp_1: bitstring creating timestamp_6 at {20} in copy a_2
+
+new sequence_1: bitstring creating sequence_6 at {21} in copy a_2
+
+event secure_publish(device_2,topic_2,payload_7,sequence_6,timestamp_6) at {25} in copy a_2
+
+out(mqtt, (~M,~M_1,~M_2,~M_3,~M_4,~M_5,~M_6)) with ~M = device_2, ~M_1 = topic_2, ~M_2 = timestamp_6, ~M_3 = sequence_6, ~M_4 = payload_7, ~M_5 = digest(payload_7), ~M_6 = hmac(k_2,protected_body(device_2,topic_2,timestamp_6,sequence_6,digest(payload_7))) at {26} in copy a_2
+
+out(sensor_ch_2, payload_6) at {8} in copy a received at {19} in copy a_3
+
+new timestamp_1: bitstring creating timestamp_7 at {20} in copy a_3
+
+new sequence_1: bitstring creating sequence_7 at {21} in copy a_3
+
+event secure_publish(device_2,topic_2,payload_6,sequence_7,timestamp_7) at {25} in copy a_3
+
+out(mqtt, (~M_7,~M_8,~M_9,~M_10,~M_11,~M_12,~M_13)) with ~M_7 = device_2, ~M_8 = topic_2, ~M_9 = timestamp_7, ~M_10 = sequence_7, ~M_11 = payload_6, ~M_12 = digest(payload_6), ~M_13 = hmac(k_2,protected_body(device_2,topic_2,timestamp_7,sequence_7,digest(payload_6))) at {26} in copy a_3
+
+in(mqtt, (device_2,topic_2,~M_9,~M_10,~M_11,digest(~M_11),~M_13)) with ~M_9 = timestamp_7, ~M_10 = sequence_7, ~M_11 = payload_6, digest(~M_11) = digest(payload_6), ~M_13 = hmac(k_2,protected_body(device_2,topic_2,timestamp_7,sequence_7,digest(payload_6))) at {27}
+
+event gateway_first_accept(device_2,topic_2,payload_6,sequence_7,timestamp_7) at {67}
+
+event gateway_accept(device_2,topic_2,payload_6,sequence_7,timestamp_7) at {68}
+
+in(mqtt, (device_2,topic_2,~M_2,~M_3,~M_4,digest(~M_4),~M_6)) with ~M_2 = timestamp_6, ~M_3 = sequence_6, ~M_4 = payload_7, digest(~M_4) = digest(payload_7), ~M_6 = hmac(k_2,protected_body(device_2,topic_2,timestamp_6,sequence_6,digest(payload_7))) at {69}
+
+event gateway_second_accept(device_2,topic_2,payload_7,sequence_6,timestamp_6,device_2,topic_2,sequence_7) at {92} (goal)
+
+The event gateway_second_accept(device_2,topic_2,payload_7,sequence_6,timestamp_6,device_2,topic_2,sequence_7) is executed at {92}.
+A trace has been found.
+RESULT not event(gateway_second_accept(d,t,p,s,ts,seen_d,seen_t,seen_s)) is false.
 
 --------------------------------------------------------------
 Verification summary:
@@ -726,19 +929,25 @@ Query not attacker(k_1[]) is true.
 
 Query not attacker(k_2[]) is true.
 
-Query inj-event(gateway_accept(d_2,t_2,p_2,s_2,ts_2)) ==> inj-event(secure_publish(d_2,t_2,p_2,s_2,ts_2)) cannot be proved.
+Query event(gateway_accept(d,t,p,s,ts)) ==> event(secure_publish(d,t,p,s,ts)) is true.
 
-Query not event(gateway_accept(d_2,topic_unauthorized[],p_2,s_2,ts_2)) is true.
+Query not event(gateway_accept(d,topic_unauthorized[],p,s,ts)) is true.
 
-Query not event(gateway_accept(device_1[],topic_1[],p_2,s_2,ts_2)) cannot be proved.
+Query event(gateway_accept(d,t,p,s,ts)) ==> event(sensor_measure(d,t,p)) is true.
 
-Query not event(gateway_accept(device_2[],topic_2[],p_2,s_2,ts_2)) cannot be proved.
+Query not event(gateway_second_accept(d,t,p,s,ts,d,t,s)) is true.
 
-Query event(gateway_accept(d_2,t_2,p_2,s_2,ts_2)) ==> event(sensor_measure(d_2,t_2,p_2)) is true.
+Query event(replay_rejected(d,t,p,s,ts,d,t,s)) ==> event(gateway_first_accept(d,t,p,s,ts)) is true.
 
-Query event(provenance_created(d_2,t_2,p_2,s_2,ts_2)) ==> event(gateway_validated(d_2,t_2,p_2,s_2,ts_2)) is true.
+Query not event(gateway_first_accept(device_1[],topic_1[],p,s,ts)) is false.
 
-Query event(dt_state_applied(d_2,t_2,p_2,s_2,ts_2)) ==> event(gateway_validated(d_2,t_2,p_2,s_2,ts_2)) is true.
+Query not event(gateway_first_accept(device_2[],topic_2[],p,s,ts)) is false.
+
+Query not event(replay_rejected(device_1[],topic_1[],p,s,ts,device_1[],topic_1[],s)) is false.
+
+Query not event(replay_rejected(device_2[],topic_2[],p,s,ts,device_2[],topic_2[],s)) is false.
+
+Query not event(gateway_second_accept(d,t,p,s,ts,seen_d,seen_t,seen_s)) is false.
 
 --------------------------------------------------------------
 

@@ -1,10 +1,12 @@
 RESULT not attacker(k_1[]) is true.
 RESULT not attacker(k_2[]) is true.
-RESULT inj-event(gateway_accept(d_2,t_2,p_2,s_2,ts_2)) ==> inj-event(secure_publish(d_2,t_2,p_2,s_2,ts_2)) cannot be proved.
-RESULT (but event(gateway_accept(d_2,t_2,p_2,s_2,ts_2)) ==> event(secure_publish(d_2,t_2,p_2,s_2,ts_2)) is true.)
-RESULT not event(gateway_accept(d_2,topic_unauthorized[],p_2,s_2,ts_2)) is true.
-RESULT not event(gateway_accept(device_1[],topic_1[],p_2,s_2,ts_2)) cannot be proved.
-RESULT not event(gateway_accept(device_2[],topic_2[],p_2,s_2,ts_2)) cannot be proved.
-RESULT event(gateway_accept(d_2,t_2,p_2,s_2,ts_2)) ==> event(sensor_measure(d_2,t_2,p_2)) is true.
-RESULT event(provenance_created(d_2,t_2,p_2,s_2,ts_2)) ==> event(gateway_validated(d_2,t_2,p_2,s_2,ts_2)) is true.
-RESULT event(dt_state_applied(d_2,t_2,p_2,s_2,ts_2)) ==> event(gateway_validated(d_2,t_2,p_2,s_2,ts_2)) is true.
+RESULT event(gateway_accept(d,t,p,s,ts)) ==> event(secure_publish(d,t,p,s,ts)) is true.
+RESULT not event(gateway_accept(d,topic_unauthorized[],p,s,ts)) is true.
+RESULT event(gateway_accept(d,t,p,s,ts)) ==> event(sensor_measure(d,t,p)) is true.
+RESULT not event(gateway_second_accept(d,t,p,s,ts,d,t,s)) is true.
+RESULT event(replay_rejected(d,t,p,s,ts,d,t,s)) ==> event(gateway_first_accept(d,t,p,s,ts)) is true.
+RESULT not event(gateway_first_accept(device_1[],topic_1[],p,s,ts)) is false.
+RESULT not event(gateway_first_accept(device_2[],topic_2[],p,s,ts)) is false.
+RESULT not event(replay_rejected(device_1[],topic_1[],p,s,ts,device_1[],topic_1[],s)) is false.
+RESULT not event(replay_rejected(device_2[],topic_2[],p,s,ts,device_2[],topic_2[],s)) is false.
+RESULT not event(gateway_second_accept(d,t,p,s,ts,seen_d,seen_t,seen_s)) is false.
